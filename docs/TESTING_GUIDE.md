@@ -4,12 +4,12 @@
 
 ## 概述
 
-AgentDesk 的测试分三层：离线测试（`test.sh`）、Docker E2E（`tests/e2e.sh`）和云主机真机验收（`agentdesk-create` skill）。三层逐层更慢、更接近真实环境，各自只覆盖下一层做不到或做得太慢的部分。本文说明每一层的范围、流程、编写约定和后续规划，新增测试时以本文为准。
+AgentDesk 的测试分三层：离线测试（`test.sh`）、Docker E2E（`tests/e2e.sh`）和云主机真机验收（`agentdesk-create` skill）。三层逐层更慢、更接近真实环境，各自只覆盖下一层做不到或做得太慢的部分。前两层也在 GitHub Actions 上运行：`.github/workflows/test.yml` 在每次推送和 PR 时运行离线测试；`e2e.yml` 手动触发，在 `ubuntu-26.04`（amd64）和 `ubuntu-26.04-arm`（arm64）runner 上各跑一遍 E2E，日志和截图作为 artifact 上传。本文说明每一层的范围、流程、编写约定和后续规划，新增测试时以本文为准。
 
 | 层 | 入口 | 耗时 | 依赖 | 证明什么 |
 |---|---|---|---|---|
 | 离线 | `bash test.sh` | 约 10 秒 | Python 3；可选 ShellCheck、mise | 脚本逻辑、参数、作用域隔离和安全保护正确 |
-| E2E | `bash tests/e2e.sh` | 30 分钟以上，首次需下载约 15 GB | 本地 systemd Docker（默认本机架构） | 发行包能在干净的系统（默认 Ubuntu 26.04）上真实安装、重跑、更新、重启，且桌面应用能打开窗口 |
+| E2E | `bash tests/e2e.sh` | 30 分钟以上，首次下载约 1.3 GB | 本地 systemd Docker（默认本机架构） | 发行包能在干净的系统（默认 Ubuntu 26.04）上真实安装、重跑、更新、重启，且桌面应用能打开窗口 |
 | 真机 | `agentdesk-create` skill | 小时级 | 云账号与原生 CLI | 真实 RDP 登录、中文输入、剪贴板、断线重连和重启后的实际体验 |
 
 ## 流程
@@ -18,6 +18,8 @@ AgentDesk 的测试分三层：离线测试（`test.sh`）、Docker E2E（`tests
 flowchart TD
     dev[开发机] --> offline["bash test.sh（离线）"]
     dev --> e2e["bash tests/e2e.sh（Docker）"]
+    ci["GitHub Actions"] -->|test.yml：每次推送| offline
+    ci -->|e2e.yml：手动，amd64 + arm64| e2e
     dev --> poc["agentdesk-create skill（云主机）"]
 
     offline --> unit["python unittest：tests/test_*.py"]
@@ -110,6 +112,4 @@ bash tests/e2e.sh --keep                                     # 保留容器排�
 
 ## 后续规划
 
-1. 仓库启用 git 后，在 CI 的每次推送上运行 `bash test.sh`，安装 ShellCheck，并设置 `AGENTDESK_TEST_MISE`。
-2. E2E 放到 Linux amd64 的 CI runner 上手动或定时触发，不再要求在 Mac 上运行；`local/e2e` 的产物作为 CI artifact 上传。
-3. 其他系统和架构用 `--image`、`--arch` 按需运行，不预先建矩阵。
+1. 其他系统用 e2e 工作流的 `image` 输入或本地 `--image` 按需运行，不预先建矩阵。

@@ -21,6 +21,7 @@ AgentDesk 用一个 Bash CLI 把 Ubuntu/Debian 云主机初始化为远程桌面
 | `mise.example.toml` | 本地清单示例（个人清单或 `config.local.toml`），不安装到主机 |
 | `skills/agentdesk-create/` | 创建、部署、验收云主机的 skill |
 | `test.sh`、`tests/` | 离线测试与 Docker E2E，见 [TESTING_GUIDE](TESTING_GUIDE.md) |
+| `.github/workflows/` | CI：`test.yml` 每次推送运行离线测试，`e2e.yml` 手动在 amd64 与 arm64 上运行 E2E |
 
 安装到主机的"程序"固定为 `agentdesk.sh`、`install.sh`、`mise.toml` 三个文件加 `resources/` 目录（见 `program_files`），不另设文件清单。
 

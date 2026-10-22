@@ -1,0 +1,27 @@
+# 每次推送和 PR 运行离线测试：单元测试、真实 mise 集成测试、ShellCheck。
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # mise 与产品相同，经 extrepo 从官方 apt 源安装。
+      - name: Install ShellCheck and mise
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends shellcheck extrepo
+          sudo extrepo enable mise
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends mise
+      - name: Run tests
+        run: AGENTDESK_TEST_MISE="$(command -v mise)" bash test.sh

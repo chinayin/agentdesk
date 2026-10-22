@@ -1,0 +1,40 @@
+# 手动触发：在 amd64 与 arm64 的 systemd 容器里真实安装、重跑、重启并打开桌面应用。
+name: e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Base image
+        default: ubuntu:26.04
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-26.04
+            arch: amd64
+          - runner: ubuntu-26.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      # 镜像名经环境变量传入，由 e2e.sh 校验格式。
+      - name: Run E2E
+        env:
+          IMAGE: ${{ inputs.image }}
+          ARCH: ${{ matrix.arch }}
+        run: bash tests/e2e.sh --image "$IMAGE" --arch "$ARCH"
+      - name: Upload logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-${{ matrix.arch }}
+          path: local/e2e/
+          if-no-files-found: ignore
