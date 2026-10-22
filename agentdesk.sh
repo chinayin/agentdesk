@@ -212,10 +212,11 @@ run() {
 
 # 已验证的版本直接通过；更早的版本缺少依赖，拒绝；其他 Debian 系（新版本、衍生版）警告后继续。
 detect_platform() {
-  local release="$1" arch="$2" ID="" ID_LIKE="" VERSION_ID=""
+  local release="$1" arch="$2" ID ID_LIKE VERSION_ID
   [ -r "$release" ] || missing "cannot read os-release"
+  # 在子 shell 里读取：os-release 的 VERSION 等变量不能覆盖本脚本的同名变量。
   # shellcheck disable=SC1090
-  . "$release"
+  IFS='|' read -r ID VERSION_ID ID_LIKE < <(. "$release"; printf '%s|%s|%s\n' "${ID:-}" "${VERSION_ID:-}" "${ID_LIKE:-}")
   case "$arch" in amd64|arm64) ;; *) missing "unsupported architecture: $arch (amd64 or arm64 required)" ;; esac
   case "$ID:$VERSION_ID" in
     ubuntu:22.04|ubuntu:24.04|ubuntu:26.04|debian:12|debian:13) ;;
@@ -715,6 +716,17 @@ locked_install_failed() {
   return "$1"
 }
 
+# 个人操作里，锁定与 apt 包只看个人清单：不改系统锁，也不替用户升级共享应用。
+# use、install、reshim 照常加载系统清单，与用户直接运行 mise 一致；忽略它会让 mise
+# 去改共享目录里每个工具的 global 链接，而那需要 root。
+personal_only() {
+  if [ "$SOFTWARE_SYSTEM" -eq 1 ]; then
+    software_mise "$@"
+  else
+    MISE_IGNORED_CONFIG_PATHS=/etc/mise software_mise "$@"
+  fi
+}
+
 software_main() (
   local action="$1" item config paths raw platform options_done=0
   shift
@@ -802,10 +814,8 @@ software_main() (
         paths="$(printf '%s' "$paths" | tr '\n' ':')"
         export PATH="${paths%:}:$PATH"
       fi
-      # 个人批量操作忽略系统清单（不替用户改共享软件），并保持个人锁开启。
-      if [ "$action" != run ]; then
-        export MISE_IGNORED_CONFIG_PATHS=/etc/mise MISE_LOCKFILE=1
-      fi
+      # 个人锁始终开启，不依赖系统清单里的 lockfile 设置。
+      if [ "$action" != run ]; then export MISE_LOCKFILE=1; fi
     fi
   fi
   if [ "$action" = run ]; then
@@ -816,15 +826,15 @@ software_main() (
       software_mise reshim
     fi
     if [ "${#packages[@]}" -gt 0 ]; then
-      software_mise bootstrap packages use "${config_args[@]}" "${packages[@]}"
+      personal_only bootstrap packages use "${config_args[@]}" "${packages[@]}"
     fi
   else
     # upgrade 和新主机先 --bump，避免把缓存中的旧版本当作 latest；其余沿用锁。不删除旧版本。
     platform="$(mise_platform)"
     if [ "$action" = upgrade ] || { [ "$SOFTWARE_SYSTEM" -eq 1 ] && [ ! -e /etc/mise/mise.lock ]; }; then
-      software_mise lock --global --bump --platform "$platform"
+      personal_only lock --global --bump --platform "$platform"
     else
-      software_mise lock --global --platform "$platform"
+      personal_only lock --global --platform "$platform"
     fi
     if [ "$SOFTWARE_SYSTEM" -eq 1 ]; then
       software_mise install --system --locked || locked_install_failed "$?"
@@ -836,9 +846,9 @@ software_main() (
       software_mise reshim
     fi
     if [ "$action" = upgrade ]; then
-      software_mise bootstrap packages upgrade --yes
+      personal_only bootstrap packages upgrade --yes
     else
-      software_mise bootstrap packages apply --yes
+      personal_only bootstrap packages apply --yes
     fi
   fi
 )

@@ -61,7 +61,9 @@ elif os.getenv('FAIL_LOCKED_INSTALL') and 'install' in sys.argv and '--locked' i
         apt = next(c for c in calls if 'bootstrap' in c['args'])
         self.assertIn('apt:htop', apt['args'])
         self.assertIsNone(tools['global'])
-        self.assertEqual(tools['ignored'], '/etc/mise')
+        # use 照常加载系统清单；只有 apt 包操作忽略它。
+        self.assertIsNone(tools['ignored'])
+        self.assertEqual(apt['ignored'], '/etc/mise')
         self.assertNotEqual(tools['cwd'], str(self.project))
         self.assertEqual((self.project / 'mise.toml').read_text(), '[tools]\nnode = "22"\n')
         self.assertFalse((self.base / '.agentdesk/mise.toml').exists())
@@ -73,7 +75,11 @@ elif os.getenv('FAIL_LOCKED_INSTALL') and 'install' in sys.argv and '--locked' i
         lock = next(c for c in calls if 'lock' in c['args'])
         self.assertIn('--bump', lock['args'])
         self.assertEqual(lock['ignored'], '/etc/mise')
-        self.assertTrue(any('install' in c['args'] and '--locked' in c['args'] for c in calls))
+        install = next(c for c in calls if 'install' in c['args'] and '--locked' in c['args'])
+        # 忽略系统清单会让 mise 去改共享目录里的 global 链接，install 与 reshim 不能忽略。
+        self.assertIsNone(install['ignored'])
+        self.assertTrue(all(c['ignored'] is None for c in calls if 'reshim' in c['args']))
+        self.assertTrue(all(c['ignored'] == '/etc/mise' for c in calls if 'bootstrap' in c['args']))
         # 参数形如 -C / SUBCOMMAND ...；只用 lock --bump + install，不调用 mise 的 upgrade/prune。
         self.assertFalse(any(c['args'][2] in ('upgrade', 'prune') for c in calls))
         self.assertFalse(any('files' in c['args'] for c in calls))

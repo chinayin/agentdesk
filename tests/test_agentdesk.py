@@ -154,6 +154,15 @@ class HostTests(unittest.TestCase):
                 self.assertEqual(result.returncode, status, (system, version, arch, result.stderr))
                 self.assertEqual("Warning: untested OS" in result.stderr, warned, result.stderr)
 
+    def test_os_release_does_not_override_agentdesk_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            release = Path(tmp) / "os-release"
+            release.write_text('NAME="Ubuntu"\nVERSION="26.04.1 LTS (Resolute Raccoon)"\nID=ubuntu\n'
+                               'ID_LIKE=debian\nVERSION_ID="26.04"\n')
+            result = self.function('before="$VERSION"; detect_platform "$1" amd64; [ "$VERSION" = "$before" ]', release)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Target: ubuntu 26.04 / amd64", result.stderr)
+
     def test_lock_platform_follows_machine_architecture(self):
         for machine, platform in [("x86_64", "linux-x64"), ("aarch64", "linux-arm64")]:
             result = self.function(f'uname() {{ echo {machine}; }}; mise_platform')

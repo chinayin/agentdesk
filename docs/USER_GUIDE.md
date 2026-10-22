@@ -120,6 +120,7 @@ agentdesk upgrade --system                     # 管理员：升级全机共享�
 | `~/.config/mise/config.toml` | 每个用户 | 个人软件；AgentDesk 不会改动 |
 
 - 三份清单由 mise 原生合并，`install` 自动补装差异；local 文件优先于通用清单，个人清单再叠加在上面。
+- 已知限制：mise 2026.10.17 在个人清单覆盖全机预装工具的版本时（例如个人写 `node = "22"`），会尝试修改共享目录里的链接并报 `runtime symlink repair(s) failed`。需要别的版本时，在项目目录的 `mise.toml` 里指定，或由管理员写进 `config.local.toml`。
 - 个人清单是 `~/.config/mise/config.toml`，与原生 `mise use -g` 写的是同一个文件；你自己设置的 `XDG_CONFIG_HOME`、`MISE_CONFIG_DIR`、`MISE_GLOBAL_CONFIG_FILE` 按 mise 原生规则生效。示例见 [mise.example.toml](../mise.example.toml)，完整语法见 [mise configuration](https://mise.jdx.dev/configuration.html)。
 - `apt:` 写在个人清单里只是记录需求，软件仍装在全机；需要 sudo 的步骤由 mise 提权。
 - `upgrade` 不接受软件名。要单独升级某个工具，用原生命令（例如 `mise lock --bump NAME` 再 `mise install --locked`）。`node = "26"` 保持在 26.x，`latest` 可能跨大版本。
