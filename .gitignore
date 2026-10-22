@@ -1,0 +1,16 @@
+mise.local.toml
+mise.local.lock
+mise.*.local.toml
+mise.*.local.lock
+.mise.local.toml
+.mise.local.lock
+local/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.DS_Store
+
+# 发行包只提供版本策略；工具锁在目标主机生成。
+/mise.lock

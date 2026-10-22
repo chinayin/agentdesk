@@ -1,0 +1,6 @@
+# AgentDesk：图形会话环境。排在 20dbus_xdg-runtime 与 75dbus_dbus-launch 之间，
+# 去掉共享的用户总线，由 dbus-launch 为每个 RDP 会话启动独立的 D-Bus。
+unset DBUS_SESSION_BUS_ADDRESS SESSION_MANAGER
+XDG_CONFIG_DIRS="/etc/xdg/agentdesk:${XDG_CONFIG_DIRS:-/etc/xdg}"
+LANG="@LOCALE@"
+export XDG_CONFIG_DIRS LANG

@@ -1,0 +1,49 @@
+{
+  "ImageId": "REPLACE_IMAGE_ID",
+  "InstanceType": "t3.large",
+  "KeyName": "REPLACE_KEY_NAME",
+  "MinCount": 1,
+  "MaxCount": 1,
+  "ClientToken": "REPLACE_CLIENT_TOKEN",
+  "NetworkInterfaces": [
+    {
+      "DeviceIndex": 0,
+      "SubnetId": "REPLACE_SUBNET_ID",
+      "Groups": ["REPLACE_SECURITY_GROUP_ID"],
+      "AssociatePublicIpAddress": true,
+      "DeleteOnTermination": true
+    }
+  ],
+  "BlockDeviceMappings": [
+    {
+      "DeviceName": "REPLACE_ROOT_DEVICE",
+      "Ebs": {
+        "VolumeSize": 30,
+        "VolumeType": "gp3",
+        "Encrypted": true,
+        "DeleteOnTermination": true
+      }
+    }
+  ],
+  "MetadataOptions": {
+    "HttpEndpoint": "enabled",
+    "HttpTokens": "required"
+  },
+  "CreditSpecification": {"CpuCredits": "standard"},
+  "TagSpecifications": [
+    {
+      "ResourceType": "instance",
+      "Tags": [
+        {"Key": "Name", "Value": "REPLACE_RUN_NAME"},
+        {"Key": "ManagedBy", "Value": "agentdesk"}
+      ]
+    },
+    {
+      "ResourceType": "volume",
+      "Tags": [
+        {"Key": "Name", "Value": "REPLACE_RUN_NAME"},
+        {"Key": "ManagedBy", "Value": "agentdesk"}
+      ]
+    }
+  ]
+}

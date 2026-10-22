@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 终端以登录 shell 启动，加载 /etc/profile.d/agentdesk.sh（xfce4-terminal 1.1 起的 xfconf 配置）。 -->
+<channel name="xfce4-terminal" version="1.0">
+  <property name="command-login-shell" type="bool" value="true"/>
+</channel>

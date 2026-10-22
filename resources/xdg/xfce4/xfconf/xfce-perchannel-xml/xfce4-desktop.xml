@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 默认背景：XFCE 原生深蓝渐变，不依赖发行版壁纸文件。xorgxrdp 的显示器名为 rdp0、rdp1…… -->
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="single-workspace-mode" type="bool" value="true"/>
+    <property name="single-workspace-number" type="int" value="0"/>
+    <property name="screen0" type="empty">
+      <property name="monitorrdp0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="2"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.055"/><value type="double" value="0.09"/>
+            <value type="double" value="0.16"/><value type="double" value="1"/>
+          </property>
+          <property name="rgba2" type="array">
+            <value type="double" value="0.12"/><value type="double" value="0.24"/>
+            <value type="double" value="0.31"/><value type="double" value="1"/>
+          </property>
+        </property>
+      </property>
+      <property name="monitorrdp1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="2"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.055"/><value type="double" value="0.09"/>
+            <value type="double" value="0.16"/><value type="double" value="1"/>
+          </property>
+          <property name="rgba2" type="array">
+            <value type="double" value="0.12"/><value type="double" value="0.24"/>
+            <value type="double" value="0.31"/><value type="double" value="1"/>
+          </property>
+        </property>
+      </property>
+      <property name="monitorrdp2" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="2"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.055"/><value type="double" value="0.09"/>
+            <value type="double" value="0.16"/><value type="double" value="1"/>
+          </property>
+          <property name="rgba2" type="array">
+            <value type="double" value="0.12"/><value type="double" value="0.24"/>
+            <value type="double" value="0.31"/><value type="double" value="1"/>
+          </property>
+        </property>
+      </property>
+      <property name="monitorrdp3" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="2"/>
+          <property name="image-style" type="int" value="0"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.055"/><value type="double" value="0.09"/>
+            <value type="double" value="0.16"/><value type="double" value="1"/>
+          </property>
+          <property name="rgba2" type="array">
+            <value type="double" value="0.12"/><value type="double" value="0.24"/>
+            <value type="double" value="0.31"/><value type="double" value="1"/>
+          </property>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>

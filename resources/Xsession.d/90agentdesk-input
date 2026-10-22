@@ -1,0 +1,6 @@
+# AgentDesk：Fcitx5 输入法变量，排在 im-config（70）之后以免被覆盖。
+# 守护进程由 XFCE 自启动在会话自己的 D-Bus 中拉起，见 /etc/xdg/agentdesk/autostart。
+GTK_IM_MODULE=fcitx
+QT_IM_MODULE=fcitx
+XMODIFIERS=@im=fcitx
+export GTK_IM_MODULE QT_IM_MODULE XMODIFIERS

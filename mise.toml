@@ -1,0 +1,65 @@
+# AgentDesk 维护的全机软件清单，随版本发布：init 与 agentdesk update 把它复制为
+# /etc/mise/config.toml 并覆盖，请勿在主机上直接修改。
+# 本机增补写 /etc/mise/config.local.toml（agentdesk install --system NAME），mise 原生合并且优先；
+# 个人软件写 ~/.config/mise/config.toml（agentdesk install NAME）。
+# mise configuration: https://mise.jdx.dev/configuration.html
+
+[settings]
+lockfile = true
+# 首次安装解析上游版本；锁在目标主机生成，不随程序发行。
+use_versions_host = false
+task.run_auto_install = false
+
+[tools]
+# 语言运行时与包管理
+"core:node" = "26"
+"core:python" = "3.14"
+"core:go" = "latest"
+"aqua:pnpm/pnpm" = "latest"
+"aqua:astral-sh/uv" = "latest"
+# AI 编程 CLI：claude、codex、pi
+"aqua:anthropics/claude-code" = "latest"
+"aqua:openai/codex" = "latest"
+"aqua:earendil-works/pi" = "latest"
+# 代码托管 CLI：gh、glab
+"aqua:cli/cli" = "latest"
+"gitlab:gitlab-org/cli" = "latest"
+# 云厂商 CLI：aws、aliyun、cloudflared；凭据由各用户自己配置
+"aqua:aws/aws-cli" = "latest"
+"github:aliyun/aliyun-cli" = "latest"
+"aqua:cloudflare/cloudflared" = "latest"
+# 通用工具：rg、fd、jq、shellcheck、yamlfmt、bats、direnv、betterleaks（密钥扫描）
+"aqua:BurntSushi/ripgrep" = "latest"
+"aqua:sharkdp/fd" = "latest"
+"aqua:jqlang/jq" = "latest"
+"aqua:koalaman/shellcheck" = "latest"
+"aqua:google/yamlfmt" = "latest"
+"aqua:bats-core/bats-core" = "latest"
+"aqua:direnv/direnv" = "latest"
+"aqua:betterleaks/betterleaks" = "latest"
+
+[env]
+DISABLE_AUTOUPDATER = "1"
+
+# 系统应用直接声明厂商源和包名；mise 调用 apt，全机共享程序。
+# suites 使用厂商 stable，不跟随 Ubuntu/Debian 的发行版代号。
+[bootstrap.apt.sources.google-chrome]
+uris = "https://dl.google.com/linux/chrome/deb/"
+suites = "stable"
+components = "main"
+key = "https://dl.google.com/linux/linux_signing_key.pub"
+fingerprint = "EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796"
+
+[bootstrap.apt.sources.vscode]
+uris = "https://packages.microsoft.com/repos/code"
+suites = "stable"
+components = "main"
+key = "https://packages.microsoft.com/keys/microsoft.asc"
+fingerprint = "BC528686B50D79E339D3721CEB3E94ADBE1229CF"
+
+[bootstrap.packages]
+"apt:google-chrome-stable" = "latest"
+"apt:code" = "latest"
+"apt:tmux" = "latest"
+"apt:mise" = "latest"
+

@@ -1,0 +1,16 @@
+# 本地软件清单示例。把需要的条目复制到：
+#   个人：~/.config/mise/config.toml，或执行 agentdesk install gemini kubectl apt:htop
+#   本机管理员：/etc/mise/config.local.toml，或执行 agentdesk install --system NAME
+# 预装软件在 /etc/mise/config.toml（AgentDesk 维护），无需重复；同名条目写在这里可覆盖其版本。
+# mise configuration: https://mise.jdx.dev/configuration.html
+# apt packages:       https://mise.jdx.dev/bootstrap/packages/apt.html
+
+# 命令行工具，由 mise 安装。名称取自 mise 注册表（mise registry 可查）；
+# 注册表里没有的，用前缀指定来源，如 "npm:包名"、"pipx:包名"。
+[tools]
+gemini = "latest"   # Gemini CLI
+kubectl = "latest"  # Kubernetes CLI
+
+# 系统软件包，由 mise 调用 apt 安装到全机。
+[bootstrap.packages]
+"apt:htop" = "latest"  # 终端里的进程查看器
