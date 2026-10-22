@@ -6,8 +6,9 @@
 
 [settings]
 lockfile = true
-# 首次安装解析上游版本；锁在目标主机生成，不随程序发行。
-use_versions_host = false
+# 锁在目标主机生成，不随程序发行。版本经 mise 的版本服务解析，不消耗 GitHub API
+# 的匿名限额（每个 IP 每小时 60 次）；关掉它时新主机首次安装会因限额失败。
+use_versions_host = true
 task.run_auto_install = false
 
 [tools]

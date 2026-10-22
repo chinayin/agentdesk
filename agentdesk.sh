@@ -709,6 +709,12 @@ software_mise() {
   fi
 }
 
+# 锁定时下载失败的工具不会进锁，到 install --locked 才报错；补一句排查方向，保留原退出码。
+locked_install_failed() {
+  warn "some tools could not be locked or downloaded; check access to GitHub (or pass --proxy URL) and rerun"
+  return "$1"
+}
+
 software_main() (
   local action="$1" item config paths raw platform options_done=0
   shift
@@ -821,12 +827,12 @@ software_main() (
       software_mise lock --global --platform "$platform"
     fi
     if [ "$SOFTWARE_SYSTEM" -eq 1 ]; then
-      software_mise install --system --locked
+      software_mise install --system --locked || locked_install_failed "$?"
       software_mise reshim --system
       # 先写入厂商源等系统文件，再装 apt 包。
       software_mise bootstrap files apply --yes
     else
-      software_mise install --locked
+      software_mise install --locked || locked_install_failed "$?"
       software_mise reshim
     fi
     if [ "$action" = upgrade ]; then

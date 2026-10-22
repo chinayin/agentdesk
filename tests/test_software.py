@@ -35,6 +35,7 @@ with open(os.environ['CALL_LOG'], 'a') as f:
 if '--version' in sys.argv: print('2026.10.15 test')
 elif 'bin-paths' in sys.argv: pass
 elif os.getenv('FAIL_MISE'): sys.exit(43)
+elif os.getenv('FAIL_LOCKED_INSTALL') and 'install' in sys.argv and '--locked' in sys.argv: sys.exit(44)
 ''')
         mise.chmod(0o755)
         # 去掉开发机的 mise/XDG 与代理设置，结果不受本机环境影响。
@@ -88,6 +89,14 @@ elif os.getenv('FAIL_MISE'): sys.exit(43)
         self.env['FAIL_MISE'] = '1'
         result = self.invoke('install', 'ruff', 'apt:htop')
         self.assertEqual(result.returncode, 43, result.stderr)
+        self.assertFalse(any('bootstrap' in c['args'] for c in self.calls()))
+
+    def test_locked_install_failure_points_to_network_and_keeps_exit_code(self):
+        # 锁定时下载失败的工具不进锁，install --locked 才失败。
+        self.env['FAIL_LOCKED_INSTALL'] = '1'
+        result = self.invoke('install')
+        self.assertEqual(result.returncode, 44, result.stderr)
+        self.assertIn('Warning: some tools could not be locked or downloaded', result.stderr)
         self.assertFalse(any('bootstrap' in c['args'] for c in self.calls()))
 
     def test_bad_arguments_are_rejected_before_any_mise_action(self):

@@ -94,7 +94,7 @@ mise 原生加载系统目录的 `conf.d/*.toml` → `config.toml` → `config.l
 
 - **作用域隔离**用 mise 原生的 `MISE_IGNORED_CONFIG_PATHS`：个人批量操作忽略 `/etc/mise`，不会替普通用户锁定、安装或升级共享工具和应用；`--system` 操作忽略 `/root/.config/mise`，root 的个人工具不会并入共享清单。运行任务和登录会话仍继承系统默认。
 - **`--system` 在干净环境中运行**：`env -i`，`HOME=/root`，只透传代理变量，不读取调用者的项目或 `MISE_*` 设置；成功后把两份清单和两份锁设为 0644。不设置 `MISE_SYSTEM_CONFIG_FILE`：它会让 mise 只读单个文件，`config.local.toml` 将被忽略。root 执行个人命令会被拒绝。
-- **软件版本**：仓库不分发锁文件。首次安装按版本策略解析上游版本，在目标主机按本机平台（linux-x64 或 linux-arm64）生成锁；之后的 install 沿用锁，upgrade 才刷新。Node 26、Python 3.14 取各自系列的最新版，其余默认 `latest`。upgrade 不删除旧版本。
+- **软件版本**：仓库不分发锁文件。首次安装按版本策略解析上游版本，在目标主机按本机平台（linux-x64 或 linux-arm64）生成锁。版本经 mise 的版本服务（`use_versions_host = true`）解析，下载地址按 aqua 注册表拼出，不调用 GitHub API，所以没有 token 的新主机不会撞上每 IP 每小时 60 次的匿名限额；之后的 install 沿用锁，upgrade 才刷新。Node 26、Python 3.14 取各自系列的最新版，其余默认 `latest`。upgrade 不删除旧版本。
 - **桌面应用**只预装 Chrome 和 VS Code，厂商源直接用 `[bootstrap.apt.sources]` 声明。AI 工具只装命令行版本（Claude Code、Codex、pi），不预装 Claude Desktop、ChatGPT 等桌面客户端。
 - 软件名和后端的解析完全交给 mise；只有确实需要额外部署步骤时，才在个人清单里写 `[tasks]`。
 

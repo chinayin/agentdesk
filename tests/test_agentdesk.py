@@ -30,6 +30,12 @@ cat "$ARCHIVE"
 
 
 class HostTests(unittest.TestCase):
+    def test_versions_resolve_without_github_api(self):
+        # 关掉版本服务会让新主机按 IP 消耗 GitHub API 匿名限额，首次安装失败。
+        import tomllib
+        settings = tomllib.loads((ROOT / "mise.toml").read_text())["settings"]
+        self.assertIs(settings.get("use_versions_host", True), True)
+
     def test_mise_comes_from_official_apt_repository(self):
         result = self.function('DRY_RUN=1; install_mise')
         self.assertEqual(result.returncode, 0, result.stderr)
