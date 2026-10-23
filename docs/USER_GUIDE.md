@@ -100,6 +100,7 @@ agentdesk desktop-reset --force                 # 先退出该用户的全部图
 - 主题和桌面语言是全机设置：用新的 `--theme` 或 `--locale` 重新执行 init，在下次登录时生效；已经自己改过外观的用户，保留自己的设置。
 - 想放弃个人修改、回到默认外观：`desktop-reset --force`。它直接删除面板、外观、窗口管理器、背景、终端这几项个人设置（不做备份），其他个人设置保留；不加 `--force` 会拒绝执行。XFCE 配置由 dotfiles 以符号链接管理时也会拒绝，避免改到 dotfiles 本身。
 - 默认背景是 XFCE 自带的深蓝渐变，已为 RDP 的前四个显示器预置；不满意可以在 Desktop Settings 中修改。
+- 时区：AgentDesk 不修改系统时区。云镜像默认是 UTC，与机房所在地无关（东京区的机器也是 UTC）。需要本地时间时执行 `sudo timedatectl set-timezone Asia/Shanghai`（换成你的时区），重新登录桌面后时钟生效。
 - XFCE 终端默认以登录 shell 启动，会加载 mise 的工具路径、`mise activate` 和 direnv hook；项目目录里的 `mise.toml` 按 mise 原生规则切换版本。
 
 ## 6. 软件管理

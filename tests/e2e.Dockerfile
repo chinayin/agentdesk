@@ -8,7 +8,7 @@ RUN --mount=type=cache,id=agentdesk-e2e-apt-${TARGETARCH},target=/var/cache/apt,
     && printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' > /etc/apt/apt.conf.d/80-e2e-network \
     && apt-get -o APT::Update::Error-Mode=any update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    systemd systemd-sysv dbus ca-certificates xvfb xauth xdotool x11-utils scrot \
+    systemd systemd-sysv dbus ca-certificates xvfb xauth xdotool x11-utils scrot libglib2.0-bin \
     && rm -rf /var/lib/apt/lists/*
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
