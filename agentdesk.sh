@@ -606,11 +606,16 @@ EOF
 Connect through an SSH tunnel from your computer:
   ssh -N -L 13389:127.0.0.1:${port} ${ssh_user}@SERVER
   then point your RDP client at 127.0.0.1:13389 (session Xorg, user ${DESKTOP_USER}).
+Direct RDP is off. To turn it on: sudo agentdesk init --rdp-mode direct,
+  then allow only your own IP on TCP ${port} in the security group or firewall.
 EOF
   else
     cat <<EOF
-Point your RDP client at SERVER:${port} (session Xorg, user ${DESKTOP_USER}).
+Connect directly: point your RDP client at SERVER:${port} (session Xorg, user ${DESKTOP_USER}).
   Allow only your own IP on TCP ${port} in the security group or firewall.
+Or through an SSH tunnel, with no RDP port open to the network:
+  ssh -N -L 13389:127.0.0.1:${port} ${ssh_user}@SERVER
+  then point your RDP client at 127.0.0.1:13389.
 EOF
   fi
   cat <<EOF
