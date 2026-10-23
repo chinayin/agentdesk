@@ -2,7 +2,7 @@
 # AgentDesk CLI：主机初始化、检查、桌面重置与软件命令；不执行用户的 mise task。
 set -euo pipefail
 
-VERSION="0.2.0-dev"
+VERSION="0.2.0"
 # 解析全局入口的软链，资源相对于真实程序目录。
 agentdesk_source="${BASH_SOURCE[0]}"
 while [ -L "$agentdesk_source" ]; do
