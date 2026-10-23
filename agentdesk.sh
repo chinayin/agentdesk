@@ -15,6 +15,7 @@ unset agentdesk_source agentdesk_parent
 DRY_RUN=0
 AGENTDESK_REPO="chinayin/agentdesk"
 SETTINGS_FILE=/etc/agentdesk/agentdesk.yaml
+XRDP_INI=/etc/xrdp/xrdp.ini
 
 die() { echo "Error: $*" >&2; exit 1; }
 missing() { echo "Error: $*" >&2; exit 2; }
@@ -58,6 +59,7 @@ Turn this server into an XFCE/xrdp remote desktop with mise-managed software.
 Commands:
   init               Install or reconfigure the desktop
   verify             Check packages, services and the RDP listener
+  info               Show how to connect to this desktop
   install [NAME...]  Add software to your list, or install what is missing
   upgrade            Upgrade installed software
   run TASK [ARGS]    Run a task from your mise config
@@ -166,7 +168,7 @@ parse_args() {
     case "$1" in
       -h|--help) usage; exit 0 ;;
       --version) printf 'agentdesk %s\n' "$VERSION"; exit 0 ;;
-      init|verify|desktop-reset)
+      init|verify|info|desktop-reset)
         [ -z "$COMMAND" ] || { usage >&2; die "only one command is allowed"; }
         COMMAND="$1"; shift ;;
       --user|--theme|--rdp-mode|--rdp-port|--locale)
@@ -392,10 +394,10 @@ configure_rdp() (
   local tmp
   tmp="$(mktemp)"
   trap 'rm -f "$tmp"' EXIT
-  render_xrdp /etc/xrdp/xrdp.ini "$tmp" "$RDP_MODE" "$RDP_PORT"
-  if ! cmp -s "$tmp" /etc/xrdp/xrdp.ini; then
-    cat "$tmp" > /etc/xrdp/xrdp.ini
-    info "Updated /etc/xrdp/xrdp.ini: mode=$RDP_MODE port=$RDP_PORT"
+  render_xrdp "$XRDP_INI" "$tmp" "$RDP_MODE" "$RDP_PORT"
+  if ! cmp -s "$tmp" "$XRDP_INI"; then
+    cat "$tmp" > "$XRDP_INI"
+    info "Updated $XRDP_INI: mode=$RDP_MODE port=$RDP_PORT"
     if systemctl is-active --quiet xrdp; then
       warn "RDP config changed; log out and run: sudo systemctl restart xrdp"
     fi
@@ -562,19 +564,61 @@ initialize() {
   else
     write_settings "$SETTINGS_FILE"
   fi
-  info "Host initialization finished (agentdesk $VERSION); log in as $DESKTOP_USER"
+  info "Host initialization finished (agentdesk $VERSION)"
   info "Personal software: agentdesk install NAME; upgrade shared software: agentdesk upgrade --system"
-  info "Run: agentdesk verify"
-  connection_hint
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dry-run: print connection details (agentdesk info)"
+  else
+    show_info
+  fi
 }
 
-connection_hint() {
-  if [ "$RDP_MODE" = tunnel ]; then
-    info "Optional tunnel: ssh -N -L 13389:127.0.0.1:$RDP_PORT SSH_USER@SERVER"
-    info "Connect the RDP client to 127.0.0.1:13389"
-  else
-    warn "Direct RDP: confirm the existing firewall/security group allows only your source IP/CIDR on TCP $RDP_PORT"
+# 连接方式，init 结束时与 agentdesk info 输出到 stdout。只报告本机事实：
+# 不猜测公网地址，不输出任何凭据。
+show_info() {
+  [ -r "$SETTINGS_FILE" ] || missing "AgentDesk is not initialized on this host; run install.sh first"
+  local endpoint port mode=direct password="" addresses zone ssh_user="${SUDO_USER:-${USER:-}}"
+  endpoint="$(xrdp_endpoint "$XRDP_INI" 2>/dev/null)" || missing "no RDP listener in ${XRDP_INI}; rerun agentdesk init"
+  port="${endpoint##*:}"
+  [ "${endpoint%:*}" != 127.0.0.1 ] || mode=tunnel
+  [ -n "$ssh_user" ] && [ "$ssh_user" != root ] || ssh_user=SSH_USER
+  # 只有 root 能读其他账户的密码状态。
+  if [ "$EUID" -eq 0 ]; then
+    if password_ready "$DESKTOP_USER"; then
+      password=" (password set)"
+    else
+      password=" (no password yet: sudo passwd ${DESKTOP_USER})"
+    fi
   fi
+  addresses="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+(\.[0-9]+){3}$' | paste -sd ' ' -)" || addresses=""
+  zone="$(timedatectl show -p Timezone --value 2>/dev/null)" || zone=""
+  [ -n "$zone" ] || zone="$(readlink /etc/localtime 2>/dev/null | sed 's#.*/zoneinfo/##')"
+  cat <<EOF
+AgentDesk $VERSION
+
+Desktop user  ${DESKTOP_USER}${password}
+RDP listener  ${endpoint} (${mode})
+Time zone     ${zone:-unknown}
+
+EOF
+  if [ "$mode" = tunnel ]; then
+    cat <<EOF
+Connect through an SSH tunnel from your computer:
+  ssh -N -L 13389:127.0.0.1:${port} ${ssh_user}@SERVER
+  then point your RDP client at 127.0.0.1:13389 (session Xorg, user ${DESKTOP_USER}).
+EOF
+  else
+    cat <<EOF
+Point your RDP client at SERVER:${port} (session Xorg, user ${DESKTOP_USER}).
+  Allow only your own IP on TCP ${port} in the security group or firewall.
+EOF
+  fi
+  cat <<EOF
+  SERVER is this server's public address${addresses:+ (local addresses: ${addresses})}.
+
+Change the time zone: sudo timedatectl set-timezone Asia/Shanghai
+Check the installation: agentdesk verify
+EOF
 }
 
 package_installed() {
@@ -636,16 +680,16 @@ verify() {
   check "global command available" test -x /usr/local/bin/agentdesk
   check "system software config present" test -r /etc/mise/config.toml
   check "agentdesk settings present" test -r "$SETTINGS_FILE"
-  if endpoint="$(xrdp_endpoint /etc/xrdp/xrdp.ini 2>/dev/null)"; then
+  if endpoint="$(xrdp_endpoint "$XRDP_INI" 2>/dev/null)"; then
     RDP_PORT="${endpoint##*:}"
     RDP_MODE=direct
     [ "${endpoint%:*}" != 127.0.0.1 ] || RDP_MODE=tunnel
     check "RDP listener $endpoint" listener_ready "$endpoint"
   else
-    check "RDP listener configured in /etc/xrdp/xrdp.ini" false
+    check "RDP listener configured in $XRDP_INI" false
   fi
-  info "GUI login, Chinese input, installed apps and external firewall still require POC verification"
-  connection_hint
+  info "GUI login, Chinese input, installed apps and external firewall still require manual verification"
+  info "Connection details: agentdesk info"
   [ "$failures" -eq 0 ]
 }
 
@@ -928,6 +972,11 @@ main() {
       return ;;
   esac
   parse_args "$@"
+  # info 只读本机信息，不需要 root。
+  if [ "$COMMAND" = info ]; then
+    show_info
+    return
+  fi
   preflight
   case "$COMMAND" in
     init) initialize ;;

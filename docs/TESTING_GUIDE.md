@@ -55,7 +55,7 @@ flowchart TD
 
 | 文件 | 覆盖内容 |
 |---|---|
-| `tests/test_agentdesk.py` | 参数校验（不带参数显示帮助、只有选项没有命令报错）、系统矩阵（含 arm64、未验证系统警告、旧版本拒绝）、锁文件平台跟随本机架构、dry-run 不产生写入、xrdp 渲染与读取、密码不被重置、默认桌面账户、mise 来自官方 apt 源、代理白名单、程序文件结构、install.sh 本地与管道两种方式；桌面系统默认值（主题/语言/会话文件为 POSIX sh/模板占位符全部替换/面板启动器）、登录环境（普通用户加路径、root 不变、重复加载不重复）、主题下载失败传递、desktop-reset（不加 --force 拒绝、删除个人覆盖且不留备份、拒绝活动会话、拒绝符号链接）；设置文件（写入/读取/优先级/注释与引号/非法值）；自我更新（最新标签解析、新版本重跑 init、已是最新、显式 ref、缺设置文件拒绝、dry-run、非法参数）；install.sh 默认最新标签与无发布时的提示；`--proxy`（导出变量、拒绝 SOCKS/路径/裸主机、init 与 update 接受、install.sh 管道方式使用代理且不把它传给 init、非法代理在下载前拒绝）；`--remote` 在源码目录内也下载；`agentdesk update` 交给已安装的 install.sh 下载|
+| `tests/test_agentdesk.py` | 参数校验（不带参数显示帮助、只有选项没有命令报错）、连接信息 `agentdesk info`（隧道与直连、只列 IPv4、root 登录时 SSH 用户用占位符、未初始化报错、不经 sudo）、系统矩阵（含 arm64、未验证系统警告、旧版本拒绝）、锁文件平台跟随本机架构、dry-run 不产生写入、xrdp 渲染与读取、密码不被重置、默认桌面账户、mise 来自官方 apt 源、代理白名单、程序文件结构、install.sh 本地与管道两种方式；桌面系统默认值（主题/语言/会话文件为 POSIX sh/模板占位符全部替换/面板启动器）、登录环境（普通用户加路径、root 不变、重复加载不重复）、主题下载失败传递、desktop-reset（不加 --force 拒绝、删除个人覆盖且不留备份、拒绝活动会话、拒绝符号链接）；设置文件（写入/读取/优先级/注释与引号/非法值）；自我更新（最新标签解析、新版本重跑 init、已是最新、显式 ref、缺设置文件拒绝、dry-run、非法参数）；install.sh 默认最新标签与无发布时的提示；`--proxy`（导出变量、拒绝 SOCKS/路径/裸主机、init 与 update 接受、install.sh 管道方式使用代理且不把它传给 init、非法代理在下载前拒绝）；`--remote` 在源码目录内也下载；`agentdesk update` 交给已安装的 install.sh 下载|
 | `tests/test_software.py` | install/update/run 的个人与 `--system` 作用域、`MISE_IGNORED_CONFIG_PATHS`（个人操作只在锁定和 apt 包命令上忽略系统清单）、锁定安装失败时的提示、错误参数在调用 mise 前被拒绝、失败退出码透传、软链入口；`upgrade` 命令；`--system` 带名称写入 `config.local.toml` 而不是通用清单；系统操作不设置 `MISE_SYSTEM_CONFIG_FILE`；`--proxy` 写在子命令前后都传到 mise，`run` 任务名之后的 `--proxy` 留给任务 |
 | `tests/test_mise_integration.py` | 用真实 mise 验证个人配置写入、XDG 路径、任务的 stdout 与工作目录、两个方向的配置隔离；不下载、不安装软件；系统目录 `config.local.toml` 在 `config.toml` 之后加载并覆盖其版本 |
 
@@ -79,7 +79,7 @@ AGENTDESK_TEST_MISE="$(command -v mise)" bash test.sh
 |---|---|---|
 | `tests/e2e.sh` | 开发机 | 拒绝远程 Docker，构建镜像，创建并启动容器，用 tar 流复制程序结构（不带 local/），分两阶段执行，最后导出日志 |
 | `tests/e2e.Dockerfile` | 构建 | 基础镜像由 `--image` 指定（默认 Ubuntu 26.04）+ systemd + Xvfb、xdotool、scrot 等测试工具；产品软件由真实 `install.sh` 安装 |
-| `tests/e2e-container.sh` | 容器内（root） | `install` 阶段：首次安装 → verify → 确认参数已保存 → `install --system apt:htop` 写入 local 文件 → 不带参数重跑 init，校验清单、锁、密码不变且仍为 tunnel → 手改通用清单后重跑 init，校验被直接覆盖、local 文件保留 → `upgrade --system` → 个人安装 ruff、原生 `mise use -g` → `upgrade`；`check` 阶段：重启后再次 verify |
+| `tests/e2e-container.sh` | 容器内（root） | `install` 阶段：首次安装 → verify → `agentdesk info`（root 与普通用户，隧道命令、密码已设置）→ 确认参数已保存 → `install --system apt:htop` 写入 local 文件 → 不带参数重跑 init，校验清单、锁、密码不变且仍为 tunnel → 手改通用清单后重跑 init，校验被直接覆盖、local 文件保留 → `upgrade --system` → 个人安装 ruff、原生 `mise use -g` → `upgrade`；`check` 阶段：重启后再次 verify |
 | `tests/e2e-gui.sh` | 容器内（桌面用户） | 在 Xvfb 中启动 XFCE，检查回收站后端，依次打开 Chrome、VS Code 并截图；VS Code 带 `--no-sandbox`，因为容器里用不上主机的 AppArmor `vscode` 配置 |
 
 ```bash

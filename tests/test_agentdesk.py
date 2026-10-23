@@ -500,6 +500,53 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(self.shell("parse_args verify").returncode, 1)
 
 
+class InfoTests(unittest.TestCase):
+    """agentdesk info：连接方式只来自本机事实，不猜公网地址、不需要 root。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name)
+        self.settings = self.base / "agentdesk.yaml"
+        self.settings.write_text("user: desk\nrdp:\n  mode: tunnel\n  port: 3390\n")
+        self.ini = self.base / "xrdp.ini"
+
+    def info(self, listener, user="ubuntu", settings=None):
+        self.ini.write_text(f"[Globals]\nport=tcp://{listener}\n")
+        script = ('SETTINGS_FILE="$2"; XRDP_INI="$3"; USER="$4"; unset SUDO_USER; '
+                  'hostname() { echo "172.31.20.80 172.17.0.1 fe80::1"; }; '
+                  'timedatectl() { echo Etc/UTC; }; main info')
+        return subprocess.run(["bash", "-c", 'source "$1"; ' + script, "_", str(ROOT / "agentdesk.sh"),
+                               str(settings or self.settings), str(self.ini), user],
+                              env=clean_env(), text=True, capture_output=True)
+
+    def test_tunnel_mode_prints_ssh_forward(self):
+        result = self.info("127.0.0.1:3390")
+        self.assertEqual((result.returncode, result.stderr), (0, ""))
+        self.assertIn("Desktop user  desk\n", result.stdout)
+        self.assertIn("RDP listener  127.0.0.1:3390 (tunnel)", result.stdout)
+        self.assertIn("ssh -N -L 13389:127.0.0.1:3390 ubuntu@SERVER", result.stdout)
+        self.assertIn("Time zone     Etc/UTC", result.stdout)
+        self.assertIn("local addresses: 172.31.20.80 172.17.0.1)", result.stdout)
+        self.assertNotIn("fe80", result.stdout)
+
+    def test_direct_mode_points_client_at_server_port(self):
+        result = self.info("0.0.0.0:3389")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("RDP client at SERVER:3389", result.stdout)
+        self.assertIn("Allow only your own IP on TCP 3389", result.stdout)
+        self.assertNotIn("ssh -N", result.stdout)
+
+    def test_root_login_uses_placeholder_ssh_user(self):
+        result = self.info("127.0.0.1:3390", user="root")
+        self.assertIn("SSH_USER@SERVER", result.stdout)
+
+    def test_uninitialized_host_is_reported(self):
+        result = self.info("127.0.0.1:3390", settings=self.base / "absent.yaml")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("not initialized", result.stderr)
+
+
 class UpdateTests(unittest.TestCase):
     """agentdesk update：自我更新，相当于 brew update。下载交给已安装的 install.sh，这里用假 install.sh。"""
 
