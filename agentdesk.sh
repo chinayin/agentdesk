@@ -577,10 +577,13 @@ initialize() {
 # 不猜测公网地址，不输出任何凭据。
 show_info() {
   [ -r "$SETTINGS_FILE" ] || missing "AgentDesk is not initialized on this host; run install.sh first"
-  local endpoint port mode=direct password="" addresses zone ssh_user="${SUDO_USER:-${USER:-}}"
+  local endpoint port mode=direct password="" addresses zone target ssh_user="${SUDO_USER:-${USER:-}}"
   endpoint="$(xrdp_endpoint "$XRDP_INI" 2>/dev/null)" || missing "no RDP listener in ${XRDP_INI}; rerun agentdesk init"
   port="${endpoint##*:}"
   [ "${endpoint%:*}" != 127.0.0.1 ] || mode=tunnel
+  # RDP 客户端要连的地址：隧道模式连本机转发端口。
+  target="SERVER:${port}"
+  [ "$mode" = direct ] || target=127.0.0.1:13389
   [ -n "$ssh_user" ] && [ "$ssh_user" != root ] || ssh_user=SSH_USER
   # 只有 root 能读其他账户的密码状态。
   if [ "$EUID" -eq 0 ]; then
@@ -618,8 +621,13 @@ Or through an SSH tunnel, with no RDP port open to the network:
   then point your RDP client at 127.0.0.1:13389.
 EOF
   fi
+  # Windows App（macOS）不保证支持 rdp:// 链接，用 .rdp 文件打开最可靠。
   cat <<EOF
   SERVER is this server's public address${addresses:+ (local addresses: ${addresses})}.
+
+Open the connection from your computer:
+  macOS (Windows App): printf 'full address:s:${target}\nusername:s:${DESKTOP_USER}\n' > agentdesk.rdp && open agentdesk.rdp
+  Windows: mstsc /v:${target}
 
 Change the time zone: sudo timedatectl set-timezone Asia/Shanghai
 Check the installation: agentdesk verify

@@ -527,6 +527,9 @@ class InfoTests(unittest.TestCase):
         self.assertIn("RDP listener  127.0.0.1:3390 (tunnel)", result.stdout)
         self.assertIn("ssh -N -L 13389:127.0.0.1:3390 ubuntu@SERVER", result.stdout)
         self.assertIn("sudo agentdesk init --rdp-mode direct", result.stdout)
+        # 隧道模式下客户端连本机转发端口。
+        self.assertIn("printf 'full address:s:127.0.0.1:13389\\nusername:s:desk\\n' > agentdesk.rdp", result.stdout)
+        self.assertIn("mstsc /v:127.0.0.1:13389", result.stdout)
         self.assertIn("Time zone     Etc/UTC", result.stdout)
         self.assertIn("local addresses: 172.31.20.80 172.17.0.1)", result.stdout)
         self.assertNotIn("fe80", result.stdout)
@@ -539,6 +542,8 @@ class InfoTests(unittest.TestCase):
         # 直连模式下隧道同样可用（监听 0.0.0.0 也接受本机回环）。
         self.assertIn("ssh -N -L 13389:127.0.0.1:3389 ubuntu@SERVER", result.stdout)
         self.assertNotIn("Direct RDP is off", result.stdout)
+        self.assertIn("full address:s:SERVER:3389", result.stdout)
+        self.assertIn("mstsc /v:SERVER:3389", result.stdout)
 
     def test_root_login_uses_placeholder_ssh_user(self):
         result = self.info("127.0.0.1:3390", user="root")
