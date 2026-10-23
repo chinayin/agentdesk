@@ -13,7 +13,7 @@
 ## 2. 待验收
 
 - [ ] **Docker E2E 跑通。** 在 GitHub Actions 手动运行 e2e 工作流（或本地 `bash tests/e2e.sh`），覆盖设置文件、`config.local.toml`、不带参数重跑 init、手改通用清单被覆盖、`upgrade --system` 等新流程。验收：两个阶段都输出 `[PASS]`，产物齐全。
-- [ ] **Ubuntu 26.04 真机验收。** 逐项记录通过、失败或待人工验证：RDP 登录、断线重连、重启后重新登录、中文输入、主题、Chrome、VS Code、`mise.toml` 中的全部命令行工具与 tmux，以及 SSH、RDP 终端和菜单启动时的工具路径。系统级桌面配置要重点确认：`/etc/xdg/agentdesk` 的默认值被 xfconf 读取、面板启动器按 desktop ID 打开应用、rdp0 背景生效、`dbus-launch` 独立会话下重连正常、Fcitx5 自启动、XFCE 终端以登录 shell 加载 `mise activate` 和 direnv hook。不承诺重启后保留内存状态。
+- [ ] **Ubuntu 26.04 真机验收。** 逐项记录通过、失败或待人工验证：RDP 登录、断线重连、重启后重新登录、中文输入、主题、Chrome、VS Code（不加 `--no-sandbox` 能从菜单打开，即 AppArmor `vscode` 配置生效）、`mise.toml` 中的全部命令行工具与 tmux，以及 SSH、RDP 终端和菜单启动时的工具路径。系统级桌面配置要重点确认：`/etc/xdg/agentdesk` 的默认值被 xfconf 读取、面板启动器按 desktop ID 打开应用、rdp0 背景生效、`dbus-launch` 独立会话下重连正常、Fcitx5 自启动、XFCE 终端以登录 shell 加载 `mise activate` 和 direnv hook。不承诺重启后保留内存状态。
 - [ ] **代理实测。** 在只能经代理访问外网的真实网络中，用 `--proxy` 完成安装和 `agentdesk update`。验收：代理传到 apt（含厂商源）、mise 和 git，全程没有直连失败。
 - [ ] **Debian 默认 awk（mawk）。** 验证 `settings_read` 对注释、引号、两层键的解析。验收：与 macOS awk 的单元测试结果一致。
 - [ ] **系统矩阵。** 用 `bash tests/e2e.sh --image IMAGE --arch ARCH` 依次验收 Debian 13、Ubuntu 24.04、Ubuntu 22.04、Debian 12，amd64 与 arm64 各至少一个系统；只为实际发现的差异补代码（Ubuntu 22.04 的 XFCE 4.16 较旧，重点看面板配置；其 xrdp 0.9.17 自带的 xrdp.ini 已写明支持 `port=tcp://地址:端口`）。验收：每个组合都完成 E2E，最少一次真机 RDP 登录。

@@ -37,4 +37,6 @@ launch() {
   echo "[PASS] Visible application window: $name" >&2
 }
 launch chrome 'google-chrome' google-chrome --no-first-run ${proxy_flags[@]+"${proxy_flags[@]}"}
-launch code '^Code$' code --disable-workspace-trust ${proxy_flags[@]+"${proxy_flags[@]}"}
+# 容器里用不上主机的 AppArmor vscode 配置，VS Code 沙箱建不了用户命名空间；
+# 真实 Ubuntu 主机由该配置放行，沙箱留给真机验收。--verbose 让日志留在 code.log。
+launch code '^Code$' code --no-sandbox --verbose --disable-workspace-trust ${proxy_flags[@]+"${proxy_flags[@]}"}

@@ -80,7 +80,7 @@ AGENTDESK_TEST_MISE="$(command -v mise)" bash test.sh
 | `tests/e2e.sh` | 开发机 | 拒绝远程 Docker，构建镜像，创建并启动容器，用 tar 流复制程序结构（不带 local/），分两阶段执行，最后导出日志 |
 | `tests/e2e.Dockerfile` | 构建 | 基础镜像由 `--image` 指定（默认 Ubuntu 26.04）+ systemd + Xvfb、xdotool、scrot 等测试工具；产品软件由真实 `install.sh` 安装 |
 | `tests/e2e-container.sh` | 容器内（root） | `install` 阶段：首次安装 → verify → 确认参数已保存 → `install --system apt:htop` 写入 local 文件 → 不带参数重跑 init，校验清单、锁、密码不变且仍为 tunnel → 手改通用清单后重跑 init，校验被直接覆盖、local 文件保留 → `upgrade --system` → 个人安装 ruff、原生 `mise use -g` → `upgrade`；`check` 阶段：重启后再次 verify |
-| `tests/e2e-gui.sh` | 容器内（桌面用户） | 在 Xvfb 中启动 XFCE，检查回收站后端，依次打开 Chrome、VS Code 并截图 |
+| `tests/e2e-gui.sh` | 容器内（桌面用户） | 在 Xvfb 中启动 XFCE，检查回收站后端，依次打开 Chrome、VS Code 并截图；VS Code 带 `--no-sandbox`，因为容器里用不上主机的 AppArmor `vscode` 配置 |
 
 ```bash
 bash tests/e2e.sh --dry-run                                  # 只打印计划
