@@ -9,7 +9,7 @@ AgentDesk 的测试分三层：离线测试（`test.sh`）、Docker E2E（`tests
 | 层 | 入口 | 耗时 | 依赖 | 证明什么 |
 |---|---|---|---|---|
 | 离线 | `bash test.sh` | 约 10 秒 | Python 3；可选 ShellCheck、mise | 脚本逻辑、参数、作用域隔离和安全保护正确 |
-| E2E | `bash tests/e2e.sh` | 30 分钟以上，首次下载约 1.3 GB | 本地 systemd Docker（默认本机架构） | 发行包能在干净的系统（默认 Ubuntu 26.04）上真实安装、重跑、更新、重启，且桌面应用能打开窗口 |
+| E2E | `bash tests/e2e.sh` | GitHub runner 上约 3 分钟；本地视网络而定，首次下载约 1.3 GB | 本地 systemd Docker（默认本机架构） | 发行包能在干净的系统（默认 Ubuntu 26.04）上真实安装、重跑、更新、重启，且桌面应用能打开窗口 |
 | 真机 | `agentdesk-create` skill | 小时级 | 云账号与原生 CLI | 真实 RDP 登录、中文输入、剪贴板、断线重连和重启后的实际体验 |
 
 ## 流程
