@@ -37,6 +37,7 @@ launch() {
   echo "[PASS] Visible application window: $name" >&2
 }
 launch chrome 'google-chrome' google-chrome --no-first-run ${proxy_flags[@]+"${proxy_flags[@]}"}
-# 容器里用不上主机的 AppArmor vscode 配置，VS Code 沙箱建不了用户命名空间；
-# 真实 Ubuntu 主机由该配置放行，沙箱留给真机验收。--verbose 让日志留在 code.log。
-launch code '^Code$' code --no-sandbox --verbose --disable-workspace-trust ${proxy_flags[@]+"${proxy_flags[@]}"}
+# 本地 Docker 中 VS Code 沙箱建不了用户命名空间而崩溃；真实 Ubuntu 主机由 apparmor 包的
+# vscode 配置放行，沙箱留给真机验收。--verbose 让日志留在 code.log。
+# VS Code 新版的窗口类名为 com.microsoft.VSCode，旧版为 Code。
+launch code '^(Code|com\.microsoft\.VSCode)$' code --no-sandbox --verbose --disable-workspace-trust ${proxy_flags[@]+"${proxy_flags[@]}"}
