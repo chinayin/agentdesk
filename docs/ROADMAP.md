@@ -12,14 +12,13 @@
 - [ ] **代理实测。** 在只能经代理访问外网的真实网络中，用 `--proxy` 完成安装和 `agentdesk update`。验收：代理传到 apt（含厂商源）、mise 和 git，全程没有直连失败。
 - [ ] **Debian 默认 awk（mawk）。** 验证 `settings_read` 对注释、引号、两层键的解析。验收：与 macOS awk 的单元测试结果一致。
 - [ ] **系统矩阵。** 用 `bash tests/e2e.sh --image IMAGE --arch ARCH` 依次验收 Debian 13、Ubuntu 24.04、Ubuntu 22.04、Debian 12，amd64 与 arm64 各至少一个系统；只为实际发现的差异补代码（Ubuntu 22.04 的 XFCE 4.16 较旧，重点看面板配置；其 xrdp 0.9.17 自带的 xrdp.ini 已写明支持 `port=tcp://地址:端口`）。验收：每个组合都完成 E2E，最少一次真机 RDP 登录。
-- [ ] **阿里云分支 POC。** 用 `agentdesk-create` 的阿里云流程创建、部署、验收并按授权回收。验收：输出与 AWS 分支相同的交付信息。
+- [ ] **阿里云分支 POC。** 用 `agentdesk-create` 的阿里云流程创建、部署、验收并按授权回收。验收：输出与 AWS 分支相同的交付信息；`agentdesk info` 能从阿里云实例元数据取到公网地址（EIP 或固定公网 IP）。
 - [ ] **剪贴板与快捷键。** 人工验证远程到本地的反向复制，以及常用组合快捷键。验收：在至少一种 macOS 和一种 Windows RDP 客户端上记录结果。
 
 ## 2. 功能
 
 ### 近期
 
-- [ ] **交付时补全连接地址。** 主机侧已由 `agentdesk info` 输出连接方式（公网地址显示为 `SERVER`）；`agentdesk-create` 交付时用云 API 返回的地址替换 `SERVER`，汇总 SSH 命令、RDP 地址、接入方式和下一步。验收：按输出能从控制端连上；不输出密码、token 或私钥。
 - [ ] **用户软件示例。** 以一个具体软件演示 `agentdesk install`、`upgrade` 和失败后重试；需要额外部署步骤的软件才写 `[tasks]`，需要常驻时附 systemd 示例。验收：首次安装、重复执行、升级、失败重试都保留用户配置和数据；后台服务额外检查状态、日志和重启恢复。
 
 ### 之后

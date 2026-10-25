@@ -58,13 +58,18 @@ curl -x "$PROXY" -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main
 - **Direct (default)**: RDP to `SERVER:3389`, session `Xorg`. Allow only your IP in the security group or firewall first: cloud default users usually have passwordless sudo.
 - **SSH tunnel** (installed with `--rdp-mode tunnel`): `ssh -N -L 13389:127.0.0.1:3389 USER@SERVER`, then RDP to `127.0.0.1:13389`.
 
-The installer ends by printing these steps for your server; run `agentdesk info` on the server to see them again.
+The installer ends by printing these steps for your server; run `agentdesk info` on the server to see them again. On AWS and Alibaba Cloud the public address is filled in, and on a Mac you can open the desktop in Windows App with one command:
+
+```bash
+ssh USER@SERVER agentdesk rdp > agentdesk.rdp && open agentdesk.rdp
+```
 
 ## Usage
 
 ```bash
 agentdesk --version                  # show the installed version
 agentdesk info                       # show how to connect
+agentdesk rdp                        # print an .rdp file for your RDP client
 agentdesk verify                     # check packages, services and the RDP listener
 agentdesk install gemini kubectl     # add personal tools (Gemini CLI, Kubernetes CLI)
 agentdesk install apt:htop           # add a system package from apt

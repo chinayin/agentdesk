@@ -13,7 +13,7 @@ AgentDesk 用一个 Bash CLI 把 Ubuntu/Debian 云主机初始化为远程桌面
 | 文件 | 作用 |
 |---|---|
 | `install.sh` | 安装入口。`curl \| bash` 时下载最新发布标签（或 `--ref` 指定的分支/标签）的 GitHub 源码包；在源码目录内运行时直接使用本地文件（`--remote` 强制下载，供 `agentdesk update` 使用）。最后都执行 `agentdesk.sh init` |
-| `agentdesk.sh` | 全部逻辑：`init`、`verify`、`info`（连接方式）、`desktop-reset`、`update`（自我更新），以及分派给原生 mise 的 `install`、`upgrade`、`run` |
+| `agentdesk.sh` | 全部逻辑：`init`、`verify`、`info`（连接方式）、`rdp`（生成 `.rdp` 文件）、`desktop-reset`、`update`（自我更新），以及分派给原生 mise 的 `install`、`upgrade`、`run` |
 | `resources/xdg/` | 桌面系统默认值，安装到 `/etc/xdg/agentdesk/`：XFCE 面板、背景、终端，Fcitx5 自启动与拼音配置 |
 | `resources/profile.d/agentdesk.sh` | 登录环境，安装到 `/etc/profile.d/`：mise 工具路径、交互式 bash 的 `mise activate` 与 direnv hook |
 | `resources/Xsession.d/` | 图形会话环境，安装到 `/etc/X11/Xsession.d/`：`21agentdesk`（XDG 目录、语言、独立 D-Bus），`90agentdesk-input`（输入法变量） |

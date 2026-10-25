@@ -16,6 +16,7 @@ DRY_RUN=0
 AGENTDESK_REPO="chinayin/agentdesk"
 SETTINGS_FILE=/etc/agentdesk/agentdesk.yaml
 XRDP_INI=/etc/xrdp/xrdp.ini
+SYS_VENDOR_FILE=/sys/class/dmi/id/sys_vendor
 
 die() { echo "Error: $*" >&2; exit 1; }
 missing() { echo "Error: $*" >&2; exit 2; }
@@ -60,6 +61,7 @@ Commands:
   init               Install or reconfigure the desktop
   verify             Check packages, services and the RDP listener
   info               Show how to connect to this desktop
+  rdp                Print an .rdp file for your RDP client (ssh HOST agentdesk rdp > desk.rdp)
   install [NAME...]  Add software to your list, or install what is missing
   upgrade            Upgrade installed software
   run TASK [ARGS]    Run a task from your mise config
@@ -168,7 +170,7 @@ parse_args() {
     case "$1" in
       -h|--help) usage; exit 0 ;;
       --version) printf 'agentdesk %s\n' "$VERSION"; exit 0 ;;
-      init|verify|info|desktop-reset)
+      init|verify|info|rdp|desktop-reset)
         [ -z "$COMMAND" ] || { usage >&2; die "only one command is allowed"; }
         COMMAND="$1"; shift ;;
       --user|--theme|--rdp-mode|--rdp-port|--locale)
@@ -573,17 +575,53 @@ initialize() {
   fi
 }
 
-# 连接方式，init 结束时与 agentdesk info 输出到 stdout。只报告本机事实：
-# 不猜测公网地址，不输出任何凭据。
-show_info() {
+# 云主机的公网地址：按 DMI 厂商只查对应平台的实例元数据（AWS IMDSv2、阿里云），
+# 绕过代理；拿不到时为空，不做推测。其他机器不发请求。
+public_address() {
+  local vendor token ip=""
+  vendor="$(cat "$SYS_VENDOR_FILE" 2>/dev/null)" || return 0
+  case "$vendor" in
+    "Amazon EC2")
+      token="$(curl -fsS --noproxy '*' --max-time 2 -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' \
+        http://169.254.169.254/latest/api/token 2>/dev/null)" &&
+        ip="$(curl -fsS --noproxy '*' --max-time 2 -H "X-aws-ec2-metadata-token: ${token}" \
+          http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null)" ;;
+    "Alibaba Cloud")
+      ip="$(curl -fsS --noproxy '*' --max-time 2 http://100.100.100.200/latest/meta-data/eipv4 2>/dev/null)" ||
+        ip="$(curl -fsS --noproxy '*' --max-time 2 http://100.100.100.200/latest/meta-data/public-ipv4 2>/dev/null)" ;;
+  esac
+  if [[ "$ip" =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then printf '%s\n' "$ip"; fi
+}
+
+# 连接所需的本机事实，写入调用方声明的 conn_* 变量：监听、模式、公网地址（可能为空）
+# 和 RDP 客户端要连的地址（隧道模式为本机转发端口）。
+load_connection() {
   [ -r "$SETTINGS_FILE" ] || missing "AgentDesk is not initialized on this host; run install.sh first"
-  local endpoint port mode=direct password="" addresses zone target ssh_user="${SUDO_USER:-${USER:-}}"
-  endpoint="$(xrdp_endpoint "$XRDP_INI" 2>/dev/null)" || missing "no RDP listener in ${XRDP_INI}; rerun agentdesk init"
-  port="${endpoint##*:}"
-  [ "${endpoint%:*}" != 127.0.0.1 ] || mode=tunnel
-  # RDP 客户端要连的地址：隧道模式连本机转发端口。
-  target="SERVER:${port}"
-  [ "$mode" = direct ] || target=127.0.0.1:13389
+  conn_endpoint="$(xrdp_endpoint "$XRDP_INI" 2>/dev/null)" || missing "no RDP listener in ${XRDP_INI}; rerun agentdesk init"
+  conn_port="${conn_endpoint##*:}"
+  conn_mode=direct
+  [ "${conn_endpoint%:*}" != 127.0.0.1 ] || conn_mode=tunnel
+  conn_server="$(public_address)"
+  conn_target="${conn_server:-SERVER}:${conn_port}"
+  [ "$conn_mode" = direct ] || conn_target=127.0.0.1:13389
+}
+
+# .rdp 文件内容输出到 stdout，在本地重定向成文件后用 RDP 客户端打开。
+show_rdp() {
+  local conn_endpoint conn_port conn_mode conn_server conn_target
+  load_connection
+  [ "$conn_mode" = tunnel ] || [ -n "$conn_server" ] ||
+    missing "cannot find this server's public address; see agentdesk info"
+  printf 'full address:s:%s\nusername:s:%s\n' "$conn_target" "$DESKTOP_USER"
+}
+
+# 连接方式，init 结束时与 agentdesk info 输出到 stdout。只报告本机事实与云平台元数据，
+# 不输出任何凭据。
+show_info() {
+  local conn_endpoint conn_port conn_mode conn_server conn_target
+  local server password="" addresses zone open_mac ssh_user="${SUDO_USER:-${USER:-}}"
+  load_connection
+  server="${conn_server:-SERVER}"
   [ -n "$ssh_user" ] && [ "$ssh_user" != root ] || ssh_user=SSH_USER
   # 只有 root 能读其他账户的密码状态。
   if [ "$EUID" -eq 0 ]; then
@@ -596,38 +634,46 @@ show_info() {
   addresses="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+(\.[0-9]+){3}$' | paste -sd ' ' -)" || addresses=""
   zone="$(timedatectl show -p Timezone --value 2>/dev/null)" || zone=""
   [ -n "$zone" ] || zone="$(readlink /etc/localtime 2>/dev/null | sed 's#.*/zoneinfo/##')"
+  # Windows App（macOS）不保证支持 rdp:// 链接，用 .rdp 文件打开最可靠；
+  # 地址已知（或隧道模式）时由 agentdesk rdp 生成，否则给出需替换 SERVER 的文件内容。
+  if [ "$conn_mode" = tunnel ] || [ -n "$conn_server" ]; then
+    open_mac="ssh ${ssh_user}@${server} agentdesk rdp > agentdesk.rdp && open agentdesk.rdp"
+  else
+    open_mac="printf 'full address:s:${conn_target}\\nusername:s:${DESKTOP_USER}\\n' > agentdesk.rdp && open agentdesk.rdp"
+  fi
   cat <<EOF
 AgentDesk $VERSION
 
-Desktop user  ${DESKTOP_USER}${password}
-RDP listener  ${endpoint} (${mode})
-Time zone     ${zone:-unknown}
+Desktop user    ${DESKTOP_USER}${password}
+RDP listener    ${conn_endpoint} (${conn_mode})
+Public address  ${conn_server:-unknown (shown as SERVER below)}
+Time zone       ${zone:-unknown}
 
 EOF
-  if [ "$mode" = tunnel ]; then
+  if [ "$conn_mode" = tunnel ]; then
     cat <<EOF
 Connect through an SSH tunnel from your computer:
-  ssh -N -L 13389:127.0.0.1:${port} ${ssh_user}@SERVER
+  ssh -N -L 13389:127.0.0.1:${conn_port} ${ssh_user}@${server}
   then point your RDP client at 127.0.0.1:13389 (session Xorg, user ${DESKTOP_USER}).
 Direct RDP is off. To turn it on: sudo agentdesk init --rdp-mode direct,
-  then allow only your own IP on TCP ${port} in the security group or firewall.
+  then allow only your own IP on TCP ${conn_port} in the security group or firewall.
 EOF
   else
     cat <<EOF
-Connect directly: point your RDP client at SERVER:${port} (session Xorg, user ${DESKTOP_USER}).
-  Allow only your own IP on TCP ${port} in the security group or firewall.
+Connect directly: point your RDP client at ${server}:${conn_port} (session Xorg, user ${DESKTOP_USER}).
+  Allow only your own IP on TCP ${conn_port} in the security group or firewall.
 Or through an SSH tunnel, with no RDP port open to the network:
-  ssh -N -L 13389:127.0.0.1:${port} ${ssh_user}@SERVER
+  ssh -N -L 13389:127.0.0.1:${conn_port} ${ssh_user}@${server}
   then point your RDP client at 127.0.0.1:13389.
 EOF
   fi
-  # Windows App（macOS）不保证支持 rdp:// 链接，用 .rdp 文件打开最可靠。
+  [ -n "$conn_server" ] ||
+    echo "  SERVER is this server's public address${addresses:+ (local addresses: ${addresses})}."
   cat <<EOF
-  SERVER is this server's public address${addresses:+ (local addresses: ${addresses})}.
 
 Open the connection from your computer:
-  macOS (Windows App): printf 'full address:s:${target}\nusername:s:${DESKTOP_USER}\n' > agentdesk.rdp && open agentdesk.rdp
-  Windows: mstsc /v:${target}
+  macOS (Windows App): ${open_mac}
+  Windows: mstsc /v:${conn_target}
 
 Change the time zone: sudo timedatectl set-timezone Asia/Shanghai
 Check the installation: agentdesk verify
@@ -985,11 +1031,11 @@ main() {
       return ;;
   esac
   parse_args "$@"
-  # info 只读本机信息，不需要 root。
-  if [ "$COMMAND" = info ]; then
-    show_info
-    return
-  fi
+  # info 与 rdp 只读本机信息，不需要 root。
+  case "$COMMAND" in
+    info) show_info; return ;;
+    rdp) show_rdp; return ;;
+  esac
   preflight
   case "$COMMAND" in
     init) initialize ;;

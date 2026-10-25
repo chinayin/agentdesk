@@ -501,7 +501,7 @@ class SettingsTests(unittest.TestCase):
 
 
 class InfoTests(unittest.TestCase):
-    """agentdesk info：连接方式只来自本机事实，不猜公网地址、不需要 root。"""
+    """agentdesk info / rdp：连接方式只来自本机事实与云平台元数据，不需要 root。"""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -510,40 +510,76 @@ class InfoTests(unittest.TestCase):
         self.settings = self.base / "agentdesk.yaml"
         self.settings.write_text("user: desk\nrdp:\n  mode: tunnel\n  port: 3390\n")
         self.ini = self.base / "xrdp.ini"
+        self.vendor = self.base / "sys_vendor"
 
-    def info(self, listener, user="ubuntu", settings=None):
+    def run_command(self, command, listener, user="ubuntu", settings=None, vendor=None):
         self.ini.write_text(f"[Globals]\nport=tcp://{listener}\n")
-        script = ('SETTINGS_FILE="$2"; XRDP_INI="$3"; USER="$4"; unset SUDO_USER; '
+        if vendor:
+            self.vendor.write_text(vendor + "\n")
+        else:
+            self.vendor.unlink(missing_ok=True)
+        # 元数据替身：必须绕过代理；IMDSv2 先取 token 再取地址。
+        script = ('SETTINGS_FILE="$2"; XRDP_INI="$3"; USER="$4"; SYS_VENDOR_FILE="$5"; unset SUDO_USER; '
+                  'curl() { case "$*" in *--noproxy*) ;; *) return 7 ;; esac; case "$*" in '
+                  '*api/token*) echo TOKEN ;; *"metadata-token: TOKEN"*public-ipv4*) echo 57.183.10.234 ;; '
+                  '*) return 22 ;; esac; }; '
                   'hostname() { echo "172.31.20.80 172.17.0.1 fe80::1"; }; '
-                  'timedatectl() { echo Etc/UTC; }; main info')
+                  'timedatectl() { echo Etc/UTC; }; main "$6"')
         return subprocess.run(["bash", "-c", 'source "$1"; ' + script, "_", str(ROOT / "agentdesk.sh"),
-                               str(settings or self.settings), str(self.ini), user],
+                               str(settings or self.settings), str(self.ini), user, str(self.vendor), command],
                               env=clean_env(), text=True, capture_output=True)
+
+    def info(self, listener, **kwargs):
+        return self.run_command("info", listener, **kwargs)
 
     def test_tunnel_mode_prints_ssh_forward(self):
         result = self.info("127.0.0.1:3390")
         self.assertEqual((result.returncode, result.stderr), (0, ""))
-        self.assertIn("Desktop user  desk\n", result.stdout)
-        self.assertIn("RDP listener  127.0.0.1:3390 (tunnel)", result.stdout)
+        self.assertIn("Desktop user    desk\n", result.stdout)
+        self.assertIn("RDP listener    127.0.0.1:3390 (tunnel)", result.stdout)
         self.assertIn("ssh -N -L 13389:127.0.0.1:3390 ubuntu@SERVER", result.stdout)
         self.assertIn("sudo agentdesk init --rdp-mode direct", result.stdout)
-        # 隧道模式下客户端连本机转发端口。
-        self.assertIn("printf 'full address:s:127.0.0.1:13389\\nusername:s:desk\\n' > agentdesk.rdp", result.stdout)
-        self.assertIn("mstsc /v:127.0.0.1:13389", result.stdout)
-        self.assertIn("Time zone     Etc/UTC", result.stdout)
+        self.assertIn("Time zone       Etc/UTC", result.stdout)
         self.assertIn("local addresses: 172.31.20.80 172.17.0.1)", result.stdout)
         self.assertNotIn("fe80", result.stdout)
+        # 隧道模式下 .rdp 指向本机转发端口，由 agentdesk rdp 生成。
+        self.assertIn("ssh ubuntu@SERVER agentdesk rdp > agentdesk.rdp && open agentdesk.rdp", result.stdout)
+        self.assertIn("mstsc /v:127.0.0.1:13389", result.stdout)
 
-    def test_direct_mode_points_client_at_server_port(self):
+    def test_direct_mode_without_public_address_uses_placeholder(self):
         result = self.info("0.0.0.0:3389")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Public address  unknown (shown as SERVER below)", result.stdout)
         self.assertIn("Connect directly: point your RDP client at SERVER:3389", result.stdout)
         self.assertIn("Allow only your own IP on TCP 3389", result.stdout)
         # 直连模式下隧道同样可用（监听 0.0.0.0 也接受本机回环）。
         self.assertIn("ssh -N -L 13389:127.0.0.1:3389 ubuntu@SERVER", result.stdout)
         self.assertNotIn("Direct RDP is off", result.stdout)
-        self.assertIn("full address:s:SERVER:3389", result.stdout)
+        self.assertIn("printf 'full address:s:SERVER:3389\\nusername:s:desk\\n' > agentdesk.rdp", result.stdout)
         self.assertIn("mstsc /v:SERVER:3389", result.stdout)
+
+    def test_cloud_metadata_fills_in_the_public_address(self):
+        result = self.info("0.0.0.0:3389", vendor="Amazon EC2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Public address  57.183.10.234", result.stdout)
+        self.assertIn("Connect directly: point your RDP client at 57.183.10.234:3389", result.stdout)
+        self.assertIn("ssh ubuntu@57.183.10.234 agentdesk rdp > agentdesk.rdp && open agentdesk.rdp", result.stdout)
+        self.assertIn("mstsc /v:57.183.10.234:3389", result.stdout)
+        self.assertNotIn("SERVER", result.stdout)
+
+    def test_unknown_vendor_sends_no_metadata_request(self):
+        result = self.info("0.0.0.0:3389", vendor="QEMU")
+        self.assertIn("Public address  unknown", result.stdout)
+
+    def test_rdp_file_uses_public_address_or_tunnel_port(self):
+        result = self.run_command("rdp", "0.0.0.0:3389", vendor="Amazon EC2")
+        self.assertEqual((result.returncode, result.stdout), (0, "full address:s:57.183.10.234:3389\nusername:s:desk\n"))
+        result = self.run_command("rdp", "127.0.0.1:3390")
+        self.assertEqual((result.returncode, result.stdout), (0, "full address:s:127.0.0.1:13389\nusername:s:desk\n"))
+        # 直连但拿不到公网地址：不输出带占位符的文件。
+        result = self.run_command("rdp", "0.0.0.0:3389")
+        self.assertEqual((result.returncode, result.stdout), (2, ""))
+        self.assertIn("cannot find this server's public address", result.stderr)
 
     def test_root_login_uses_placeholder_ssh_user(self):
         result = self.info("127.0.0.1:3390", user="root")

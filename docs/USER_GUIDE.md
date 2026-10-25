@@ -76,7 +76,9 @@ agentdesk upgrade --system --proxy http://127.0.0.1:7890
 
 ## 3. 远程连接
 
-- `agentdesk info` 随时打印连接方式：桌面用户（root 运行时附带密码是否已设置）、实际的 RDP 监听、当前时区，以及连接步骤：直连模式同时给出 SSH 隧道这种不开放 RDP 端口的方式，隧道模式说明如何开启直连；最后给出在本地电脑上直接打开连接的命令：macOS 生成 `.rdp` 文件后用 Windows App 打开（Windows App 不保证支持 `rdp://` 链接），Windows 用 `mstsc /v:地址`；init 结束时也会打印一次，普通用户也能运行。它不猜测公网地址，用 `SERVER` 表示，并列出本机网卡地址供内网或 VPN 使用；不输出任何密码或密钥。
+- `agentdesk info` 随时打印连接方式：桌面用户（root 运行时附带密码是否已设置）、实际的 RDP 监听、公网地址、当前时区，以及连接步骤（直连模式同时给出 SSH 隧道这种不开放 RDP 端口的方式，隧道模式说明如何开启直连）。init 结束时也会打印一次，普通用户也能运行，不输出任何密码或密钥。
+- 公网地址只从云平台的实例元数据读取：按主板厂商识别 AWS（IMDSv2）和阿里云，读取时绕过代理；其他机器不发请求，显示为 `SERVER` 并列出本机网卡地址。
+- `agentdesk rdp` 把填好地址和桌面用户名的 `.rdp` 文件输出到 stdout。在 Mac 上用 Windows App 打开：`ssh 用户@服务器 agentdesk rdp > agentdesk.rdp && open agentdesk.rdp`（Windows App 不保证支持 `rdp://` 链接，`.rdp` 文件最可靠）；Windows 用 `mstsc /v:地址`。隧道模式下文件里的地址是本机转发端口 `127.0.0.1:13389`；直连模式取不到公网地址时 `rdp` 报错退出，改用 info 里需要替换 `SERVER` 的命令。
 - **直连**：RDP 连接 `服务器:端口`，会话选 Xorg，使用桌面账户和密码登录。先在安全组或防火墙中只放行你的 IP/CIDR；已有内网或 VPN 时同样直连。
 - **SSH 隧道**：`ssh -N -L 13389:127.0.0.1:3389 SSH_USER@SERVER`，RDP 连接 `127.0.0.1:13389`。SSH 用户可以是云镜像自带的用户。
 - 修改 RDP 配置不会断开现有会话。退出桌面后，在维护窗口执行 `sudo systemctl restart xrdp`。

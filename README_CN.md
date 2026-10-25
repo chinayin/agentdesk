@@ -58,13 +58,18 @@ curl -x "$PROXY" -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main
 - **直连（默认）**：RDP 连接 `服务器:3389`，会话选 `Xorg`。先在安全组或防火墙中只放行你的 IP：云镜像的默认用户通常可以免密 sudo。
 - **SSH 隧道**（安装时加 `--rdp-mode tunnel`）：`ssh -N -L 13389:127.0.0.1:3389 用户@服务器`，再用 RDP 连接 `127.0.0.1:13389`。
 
-安装结束时会按这台服务器的实际设置打印连接步骤；之后在服务器上运行 `agentdesk info` 可以再次查看。
+安装结束时会按这台服务器的实际设置打印连接步骤；之后在服务器上运行 `agentdesk info` 可以再次查看。在 AWS 和阿里云上会自动填好公网地址；在 Mac 上一条命令即可用 Windows App 打开桌面：
+
+```bash
+ssh 用户@服务器 agentdesk rdp > agentdesk.rdp && open agentdesk.rdp
+```
 
 ## 使用
 
 ```bash
 agentdesk --version                  # 查看已安装的版本
 agentdesk info                       # 查看连接方式
+agentdesk rdp                        # 输出 RDP 客户端可打开的 .rdp 文件
 agentdesk verify                     # 检查软件包、服务和 RDP 监听
 agentdesk install gemini kubectl     # 添加个人工具（Gemini CLI、Kubernetes CLI）
 agentdesk install apt:htop           # 添加 apt 系统软件包
