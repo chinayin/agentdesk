@@ -35,6 +35,8 @@ class HostTests(unittest.TestCase):
         import tomllib
         settings = tomllib.loads((ROOT / "mise.toml").read_text())["settings"]
         self.assertIs(settings.get("use_versions_host", True), True)
+        # generate 模式会让普通用户的安装去重写系统锁。
+        self.assertEqual(settings.get("lockfile_mode"), "merge")
 
     def test_mise_comes_from_official_apt_repository(self):
         result = self.function('DRY_RUN=1; install_mise')

@@ -84,7 +84,7 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 
 - **作用域隔离**用 mise 原生的 `MISE_IGNORED_CONFIG_PATHS`。个人操作只在锁定和 apt 包命令上忽略 `/etc/mise`，不改系统锁，也不替用户升级共享应用；`use`、`install`、`reshim` 照常加载系统清单，与直接运行 mise 一致。原因：mise 在共享安装目录里为每个工具维护 `global` 链接，指向当前用户的全局与系统配置所选的版本，忽略系统清单会让它去改这些链接，而那需要 root。个人锁通过 `MISE_LOCKFILE=1` 开启，不依赖系统清单里的设置。
 - **`--system` 在干净环境中运行**：`env -i`、`HOME=/root`，只透传代理变量，忽略 `/root/.config/mise`；成功后两份清单和锁设为 0644。不设 `MISE_SYSTEM_CONFIG_FILE`，否则 mise 只读单个文件，`config.local.toml` 会被忽略。root 执行个人命令会被拒绝。
-- **版本与锁**：仓库不分发锁文件，在目标主机按本机平台（linux-x64 或 linux-arm64）生成。版本经 mise 的版本服务（`use_versions_host = true`）解析，下载地址按 aqua 注册表拼出，不调用 GitHub API，没有 token 的新主机不会撞上每 IP 每小时 60 次的匿名限额。之后 install 沿用锁，upgrade 才刷新，不删除旧版本。
+- **版本与锁**：仓库不分发锁文件，在目标主机按本机平台（linux-x64 或 linux-arm64）生成。版本经 mise 的版本服务（`use_versions_host = true`）解析，下载地址按 aqua 注册表拼出，不调用 GitHub API，没有 token 的新主机不会撞上每 IP 每小时 60 次的匿名限额。`lockfile_mode = "merge"`：安装只合并本次涉及的条目、只锁本机平台；mise 2026.10.19 起默认的 generate 会重建所有可见的锁，普通用户安装个人软件时会去写系统锁。之后 install 沿用锁，upgrade 才刷新，不删除旧版本。
 - **mise 本身**由官方 apt 源安装（`/usr/bin/mise`，apt 按签名校验），每次 init 升到最新版，`upgrade --system` 也会升级；不设最低版本。
 - **预装**以 `mise.toml` 为准：命令行工具交给 mise，Chrome、VS Code、tmux 经 apt。AI 工具只装命令行版本，不装桌面客户端。
 

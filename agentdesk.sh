@@ -917,8 +917,8 @@ software_main() (
         paths="$(printf '%s' "$paths" | tr '\n' ':')"
         export PATH="${paths%:}:$PATH"
       fi
-      # 个人锁始终开启，不依赖系统清单里的 lockfile 设置。
-      if [ "$action" != run ]; then export MISE_LOCKFILE=1; fi
+      # 锁设置不依赖系统清单：个人的锁定与 apt 命令会忽略它。
+      if [ "$action" != run ]; then export MISE_LOCKFILE=1 MISE_LOCKFILE_MODE=merge; fi
     fi
   fi
   if [ "$action" = run ]; then

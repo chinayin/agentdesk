@@ -9,6 +9,9 @@ lockfile = true
 # 锁在目标主机生成，不随程序发行。版本经 mise 的版本服务解析，不消耗 GitHub API
 # 的匿名限额（每个 IP 每小时 60 次）；关掉它时新主机首次安装会因限额失败。
 use_versions_host = true
+# 安装只合并本次涉及的条目、只锁本机平台。mise 2026.10.19 起默认的 generate 会重建
+# 所有可见的锁并锁定其他平台，普通用户安装个人软件时会去写无权写入的系统锁。
+lockfile_mode = "merge"
 task.run_auto_install = false
 
 [tools]
