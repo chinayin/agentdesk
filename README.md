@@ -55,14 +55,11 @@ curl -x "$PROXY" -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main
 
 ## Connect
 
+The installer ends by printing the connection steps for your server, and `agentdesk info` shows them again. On AWS and Alibaba Cloud the public address is filled in.
+
 - **Direct (default)**: RDP to `SERVER:3389`, session `Xorg`. Allow only your IP in the security group or firewall first: cloud default users usually have passwordless sudo.
-- **SSH tunnel** (installed with `--rdp-mode tunnel`): `ssh -N -L 13389:127.0.0.1:3389 USER@SERVER`, then RDP to `127.0.0.1:13389`.
-
-The installer ends by printing these steps for your server; run `agentdesk info` on the server to see them again. On AWS and Alibaba Cloud the public address is filled in, and on a Mac you can open the desktop in Windows App with one command:
-
-```bash
-ssh USER@SERVER agentdesk rdp > agentdesk.rdp && open agentdesk.rdp
-```
+- **SSH tunnel** (required with `--rdp-mode tunnel`): `ssh -N -L 13389:127.0.0.1:3389 USER@SERVER`, then RDP to `127.0.0.1:13389`.
+- **One command on a Mac** (Windows App): `ssh USER@SERVER agentdesk rdp > agentdesk.rdp && open agentdesk.rdp`
 
 ## Usage
 
