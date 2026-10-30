@@ -574,8 +574,12 @@ public_address() {
         ip="$(curl -fsS --noproxy '*' --max-time 2 -H "X-aws-ec2-metadata-token: ${token}" \
           http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null)" ;;
     "Alibaba Cloud")
-      ip="$(curl -fsS --noproxy '*' --max-time 2 http://100.100.100.200/latest/meta-data/eipv4 2>/dev/null)" ||
-        ip="$(curl -fsS --noproxy '*' --max-time 2 http://100.100.100.200/latest/meta-data/public-ipv4 2>/dev/null)" ;;
+      token="$(curl -fsS --noproxy '*' --max-time 2 -X PUT -H 'X-aliyun-ecs-metadata-token-ttl-seconds: 60' \
+        http://100.100.100.200/latest/api/token 2>/dev/null)" || return 0
+      ip="$(curl -fsS --noproxy '*' --max-time 2 -H "X-aliyun-ecs-metadata-token: ${token}" \
+        http://100.100.100.200/latest/meta-data/eipv4 2>/dev/null)" ||
+        ip="$(curl -fsS --noproxy '*' --max-time 2 -H "X-aliyun-ecs-metadata-token: ${token}" \
+          http://100.100.100.200/latest/meta-data/public-ipv4 2>/dev/null)" ;;
   esac
   if [[ "$ip" =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then printf '%s\n' "$ip"; fi
 }
@@ -589,7 +593,7 @@ load_connection() {
   conn_mode=direct
   [ "${conn_endpoint%:*}" != 127.0.0.1 ] || conn_mode=tunnel
   conn_server="$(public_address)"
-  conn_target="${conn_server:-SERVER}:${conn_port}"
+  conn_target="${conn_server:+${conn_server}:${conn_port}}"
   [ "$conn_mode" = direct ] || conn_target=127.0.0.1:13389
 }
 
@@ -606,9 +610,8 @@ show_rdp() {
 # 不输出任何凭据。
 show_info() {
   local conn_endpoint conn_port conn_mode conn_server conn_target
-  local server password="" addresses zone open_mac ssh_user="${SUDO_USER:-${USER:-}}"
+  local password="" addresses zone ssh_user="${SUDO_USER:-${USER:-}}"
   load_connection
-  server="${conn_server:-SERVER}"
   [ -n "$ssh_user" ] && [ "$ssh_user" != root ] || ssh_user=SSH_USER
   # 只有 root 能读其他账户的密码状态。
   if [ "$EUID" -eq 0 ]; then
@@ -618,52 +621,50 @@ show_info() {
       password=" (no password yet: sudo passwd ${DESKTOP_USER})"
     fi
   fi
-  addresses="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+(\.[0-9]+){3}$' | paste -sd ' ' -)" || addresses=""
   zone="$(timedatectl show -p Timezone --value 2>/dev/null)" || zone=""
   [ -n "$zone" ] || zone="$(readlink /etc/localtime 2>/dev/null | sed 's#.*/zoneinfo/##')"
-  # Windows App（macOS）不保证支持 rdp:// 链接，用 .rdp 文件打开最可靠；
-  # 地址已知（或隧道模式）时由 agentdesk rdp 生成，否则给出需替换 SERVER 的文件内容。
-  if [ "$conn_mode" = tunnel ] || [ -n "$conn_server" ]; then
-    open_mac="ssh ${ssh_user}@${server} agentdesk rdp > agentdesk.rdp && open agentdesk.rdp"
-  else
-    open_mac="printf 'full address:s:${conn_target}\\nusername:s:${DESKTOP_USER}\\n' > agentdesk.rdp && open agentdesk.rdp"
-  fi
   cat <<EOF
 AgentDesk $VERSION
 
 Desktop user    ${DESKTOP_USER}${password}
 RDP listener    ${conn_endpoint} (${conn_mode})
-Public address  ${conn_server:-unknown (shown as SERVER below)}
+Public address  ${conn_server:-unknown}
 Time zone       ${zone:-unknown}
 
 EOF
+  if [ -z "$conn_server" ]; then
+    addresses="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+(\.[0-9]+){3}$' | paste -sd ' ' -)" || addresses=""
+    cat <<EOF
+Connection address unavailable
+  Get the server address from your cloud console or administrator.
+  Local IPv4      ${addresses:-unknown}
+EOF
+    return
+  fi
   if [ "$conn_mode" = tunnel ]; then
     cat <<EOF
-Connect through an SSH tunnel from your computer:
-  ssh -N -L 13389:127.0.0.1:${conn_port} ${ssh_user}@${server}
-  then point your RDP client at 127.0.0.1:13389 (session Xorg, user ${DESKTOP_USER}).
-Direct RDP is off. To turn it on: sudo agentdesk init --rdp-mode direct,
-  then allow only your own IP on TCP ${conn_port} in the security group or firewall.
+Connect (SSH tunnel)
+  Start on your computer and leave running:
+    ssh -N -L 13389:127.0.0.1:${conn_port} ${ssh_user}@${conn_server}
 EOF
+    [ "$ssh_user" != SSH_USER ] || echo "  Replace SSH_USER with your SSH login user."
   else
-    cat <<EOF
-Connect directly: point your RDP client at ${server}:${conn_port} (session Xorg, user ${DESKTOP_USER}).
-  Allow only your own IP on TCP ${conn_port} in the security group or firewall.
-Or through an SSH tunnel, with no RDP port open to the network:
-  ssh -N -L 13389:127.0.0.1:${conn_port} ${ssh_user}@${server}
-  then point your RDP client at 127.0.0.1:13389.
-EOF
+    echo "Connect (direct)"
   fi
-  [ -n "$conn_server" ] ||
-    echo "  SERVER is this server's public address${addresses:+ (local addresses: ${addresses})}."
+  cat <<EOF
+  Address       ${conn_target}
+  Session       Xorg
+EOF
+  [ "$conn_mode" != direct ] || echo "  Allow your IP on TCP ${conn_port} in the security group or firewall."
+  # 在本机直接生成 .rdp，不再额外依赖一次 SSH 登录。
   cat <<EOF
 
-Open the connection from your computer:
-  macOS (Windows App): ${open_mac}
-  Windows: mstsc /v:${conn_target}
+On your computer (choose one)
+  macOS / Windows App:
+    printf 'full address:s:${conn_target}\\nusername:s:${DESKTOP_USER}\\n' > agentdesk.rdp && open agentdesk.rdp
 
-Change the time zone: sudo timedatectl set-timezone Asia/Shanghai
-Check the installation: agentdesk verify
+  Windows:
+    mstsc /v:${conn_target}
 EOF
 }
 

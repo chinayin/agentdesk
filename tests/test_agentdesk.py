@@ -547,60 +547,83 @@ class InfoTests(unittest.TestCase):
         self.ini = self.base / "xrdp.ini"
         self.vendor = self.base / "sys_vendor"
 
-    def run_command(self, command, listener, user="ubuntu", settings=None, vendor=None):
+    def run_command(self, command, listener, user="ubuntu", settings=None, vendor=None,
+                    aliyun_address="eipv4", token_failure=False):
         self.ini.write_text(f"[Globals]\nport=tcp://{listener}\n")
         if vendor:
             self.vendor.write_text(vendor + "\n")
         else:
             self.vendor.unlink(missing_ok=True)
-        # 元数据替身：必须绕过代理；IMDSv2 先取 token 再取地址。
+        # 元数据替身：两家云都要求各自的令牌，模拟阿里云加固模式。
         script = ('SETTINGS_FILE="$2"; XRDP_INI="$3"; USER="$4"; SYS_VENDOR_FILE="$5"; unset SUDO_USER; '
                   'curl() { case "$*" in *--noproxy*) ;; *) return 7 ;; esac; case "$*" in '
-                  '*api/token*) echo TOKEN ;; *"metadata-token: TOKEN"*public-ipv4*) echo 57.183.10.234 ;; '
+                  '*api/token) [ "$TOKEN_FAILURE" = 0 ] || return 22 ;; esac; case "$*" in '
+                  '*"X-aws-ec2-metadata-token-ttl-seconds: 60"*169.254.169.254/latest/api/token) echo AWS_TOKEN ;; '
+                  '*"X-aliyun-ecs-metadata-token-ttl-seconds: 60"*100.100.100.200/latest/api/token) echo ALI_TOKEN ;; '
+                  '*"X-aws-ec2-metadata-token: AWS_TOKEN"*169.254.169.254/latest/meta-data/public-ipv4) echo 57.183.10.234 ;; '
+                  '*"X-aliyun-ecs-metadata-token: ALI_TOKEN"*100.100.100.200/latest/meta-data/"$ALIYUN_ADDRESS") echo 203.0.113.42 ;; '
                   '*) return 22 ;; esac; }; '
                   'hostname() { echo "172.31.20.80 172.17.0.1 fe80::1"; }; '
                   'timedatectl() { echo Etc/UTC; }; main "$6"')
         return subprocess.run(["bash", "-c", 'source "$1"; ' + script, "_", str(ROOT / "agentdesk.sh"),
                                str(settings or self.settings), str(self.ini), user, str(self.vendor), command],
-                              env=clean_env(), text=True, capture_output=True)
+                              env={**clean_env(), "ALIYUN_ADDRESS": aliyun_address,
+                                   "TOKEN_FAILURE": str(int(token_failure))}, text=True, capture_output=True)
 
     def info(self, listener, **kwargs):
         return self.run_command("info", listener, **kwargs)
 
     def test_tunnel_mode_prints_ssh_forward(self):
-        result = self.info("127.0.0.1:3390")
+        result = self.info("127.0.0.1:3390", vendor="Amazon EC2")
         self.assertEqual((result.returncode, result.stderr), (0, ""))
         self.assertIn("Desktop user    desk\n", result.stdout)
         self.assertIn("RDP listener    127.0.0.1:3390 (tunnel)", result.stdout)
-        self.assertIn("ssh -N -L 13389:127.0.0.1:3390 ubuntu@SERVER", result.stdout)
-        self.assertIn("sudo agentdesk init --rdp-mode direct", result.stdout)
+        self.assertIn("Connect (SSH tunnel)", result.stdout)
+        self.assertIn("ssh -N -L 13389:127.0.0.1:3390 ubuntu@57.183.10.234", result.stdout)
         self.assertIn("Time zone       Etc/UTC", result.stdout)
-        self.assertIn("local addresses: 172.31.20.80 172.17.0.1)", result.stdout)
-        self.assertNotIn("fe80", result.stdout)
-        # 隧道模式下 .rdp 指向本机转发端口，由 agentdesk rdp 生成。
-        self.assertIn("ssh ubuntu@SERVER agentdesk rdp > agentdesk.rdp && open agentdesk.rdp", result.stdout)
+        self.assertIn("full address:s:127.0.0.1:13389", result.stdout)
         self.assertIn("mstsc /v:127.0.0.1:13389", result.stdout)
+        self.assertNotIn("Connect (direct)", result.stdout)
 
-    def test_direct_mode_without_public_address_uses_placeholder(self):
+    def test_missing_address_does_not_print_unusable_connection_commands(self):
         result = self.info("0.0.0.0:3389")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Public address  unknown (shown as SERVER below)", result.stdout)
-        self.assertIn("Connect directly: point your RDP client at SERVER:3389", result.stdout)
-        self.assertIn("Allow only your own IP on TCP 3389", result.stdout)
-        # 直连模式下隧道同样可用（监听 0.0.0.0 也接受本机回环）。
-        self.assertIn("ssh -N -L 13389:127.0.0.1:3389 ubuntu@SERVER", result.stdout)
-        self.assertNotIn("Direct RDP is off", result.stdout)
-        self.assertIn("printf 'full address:s:SERVER:3389\\nusername:s:desk\\n' > agentdesk.rdp", result.stdout)
-        self.assertIn("mstsc /v:SERVER:3389", result.stdout)
+        self.assertIn("Public address  unknown", result.stdout)
+        self.assertIn("cloud console", result.stdout)
+        self.assertIn("Local IPv4      172.31.20.80 172.17.0.1", result.stdout)
+        self.assertNotIn("fe80", result.stdout)
+        for text in ["SERVER", "mstsc /v:", "printf 'full address", "ssh -N"]:
+            self.assertNotIn(text, result.stdout)
 
     def test_cloud_metadata_fills_in_the_public_address(self):
         result = self.info("0.0.0.0:3389", vendor="Amazon EC2")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Public address  57.183.10.234", result.stdout)
-        self.assertIn("Connect directly: point your RDP client at 57.183.10.234:3389", result.stdout)
-        self.assertIn("ssh ubuntu@57.183.10.234 agentdesk rdp > agentdesk.rdp && open agentdesk.rdp", result.stdout)
+        self.assertIn("Connect (direct)\n  Address       57.183.10.234:3389", result.stdout)
+        self.assertIn("Allow your IP on TCP 3389", result.stdout)
+        self.assertIn("printf 'full address:s:57.183.10.234:3389\\nusername:s:desk\\n' > agentdesk.rdp", result.stdout)
         self.assertIn("mstsc /v:57.183.10.234:3389", result.stdout)
         self.assertNotIn("SERVER", result.stdout)
+        self.assertNotIn("ssh ", result.stdout)
+
+    def test_aliyun_hardened_metadata_fills_info_and_rdp(self):
+        for path in ["eipv4", "public-ipv4"]:
+            with self.subTest(path=path):
+                result = self.info("0.0.0.0:3389", vendor="Alibaba Cloud", aliyun_address=path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Public address  203.0.113.42", result.stdout)
+                self.assertNotIn("ALI_TOKEN", result.stdout + result.stderr)
+                result = self.run_command("rdp", "0.0.0.0:3389", vendor="Alibaba Cloud", aliyun_address=path)
+                self.assertEqual((result.returncode, result.stdout),
+                                 (0, "full address:s:203.0.113.42:3389\nusername:s:desk\n"))
+
+    def test_metadata_token_failure_leaves_address_unknown(self):
+        for vendor in ["Amazon EC2", "Alibaba Cloud"]:
+            with self.subTest(vendor=vendor):
+                result = self.info("0.0.0.0:3389", vendor=vendor, token_failure=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Public address  unknown", result.stdout)
+                self.assertNotIn("mstsc /v:", result.stdout)
 
     def test_unknown_vendor_sends_no_metadata_request(self):
         result = self.info("0.0.0.0:3389", vendor="QEMU")
@@ -617,8 +640,9 @@ class InfoTests(unittest.TestCase):
         self.assertIn("cannot find this server's public address", result.stderr)
 
     def test_root_login_uses_placeholder_ssh_user(self):
-        result = self.info("127.0.0.1:3390", user="root")
-        self.assertIn("SSH_USER@SERVER", result.stdout)
+        result = self.info("127.0.0.1:3390", user="root", vendor="Amazon EC2")
+        self.assertIn("SSH_USER@57.183.10.234", result.stdout)
+        self.assertIn("Replace SSH_USER", result.stdout)
 
     def test_uninitialized_host_is_reported(self):
         result = self.info("127.0.0.1:3390", settings=self.base / "absent.yaml")
