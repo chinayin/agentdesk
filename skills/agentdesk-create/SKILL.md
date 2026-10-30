@@ -16,6 +16,8 @@ Determine from the request, existing deployment records and native CLI queries:
 - SSH user, desktop user, locale, theme; direct RDP, private network/VPN, or SSH tunnel.
 - Source CIDR for direct access, and whether to keep or delete the resources afterwards.
 
+For Alibaba Cloud Ubuntu, default the initial SSH user to `root` with key-pair authentication. The AgentDesk work account defaults to `agentdesk`, overridden by `--user`.
+
 Unless the user names an OS, use Ubuntu 26.04 LTS or Debian 13 (newest XFCE and xrdp); use Ubuntu 22.04 only on request, with SSH tunnel access. Stay within the scope the user authorized. Ask only for required values that cannot be derived. Do not confuse the cloud key pair name with the local private key path. Check public key fingerprints or real SSH authentication only; never read, copy or print private key contents.
 
 Check the native CLI, the credential identity and the target region first. If the CLI is missing, give the official install link and stop the dependent steps; do not install it silently:
