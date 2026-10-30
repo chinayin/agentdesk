@@ -61,7 +61,7 @@ Commands:
   init               Install or reconfigure the desktop
   verify             Check packages, services and the RDP listener
   info               Show how to connect to this desktop
-  rdp                Print an .rdp file for your RDP client (ssh HOST agentdesk rdp > desk.rdp)
+  rdp                Print an RDP URL (macOS: open "$(ssh HOST agentdesk rdp)")
   install [NAME...]  Add software to your list, or install what is missing
   upgrade            Upgrade installed software
   run TASK [ARGS]    Run a task from your mise config
@@ -597,13 +597,18 @@ load_connection() {
   [ "$conn_mode" = direct ] || conn_target=127.0.0.1:13389
 }
 
-# .rdp 文件内容输出到 stdout，在本地重定向成文件后用 RDP 客户端打开。
+# 地址和用户名已校验；编码值中的冒号，兼容 macOS 的 URL 解析。
+rdp_url() {
+  printf 'rdp://full%%20address=s%%3A%s&username=s%%3A%s\n' "${1//:/%3A}" "$DESKTOP_USER"
+}
+
+# 链接输出到 stdout，可直接交给 macOS open。
 show_rdp() {
   local conn_endpoint conn_port conn_mode conn_server conn_target
   load_connection
   [ "$conn_mode" = tunnel ] || [ -n "$conn_server" ] ||
     missing "cannot find this server's public address; see agentdesk info"
-  printf 'full address:s:%s\nusername:s:%s\n' "$conn_target" "$DESKTOP_USER"
+  rdp_url "$conn_target"
 }
 
 # 连接方式，init 结束时与 agentdesk info 输出到 stdout。只报告本机事实与云平台元数据，
@@ -656,12 +661,11 @@ EOF
   Session       Xorg
 EOF
   [ "$conn_mode" != direct ] || echo "  Allow your IP on TCP ${conn_port} in the security group or firewall."
-  # 在本机直接生成 .rdp，不再额外依赖一次 SSH 登录。
   cat <<EOF
 
 On your computer (choose one)
   macOS / Windows App:
-    printf 'full address:s:${conn_target}\\nusername:s:${DESKTOP_USER}\\n' > agentdesk.rdp && open agentdesk.rdp
+    open '$(rdp_url "$conn_target")'
 
   Windows:
     mstsc /v:${conn_target}

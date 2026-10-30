@@ -76,7 +76,7 @@ agentdesk upgrade --system --proxy http://127.0.0.1:7890
 
 - `agentdesk info` 打印账户、地址和当前模式的连接命令；init 结束时也会打印，普通用户可运行。
 - 公网地址从 AWS、阿里云实例元数据读取；读取失败时提示手动查找地址，不输出带占位符的命令。
-- `agentdesk rdp` 输出填好地址和用户名的 `.rdp` 文件。Mac 上用 Windows App 打开：`ssh 用户@服务器 agentdesk rdp > agentdesk.rdp && open agentdesk.rdp`；Windows 用 `mstsc /v:地址`。隧道模式下地址是 `127.0.0.1:13389`；直连且取不到公网地址时 `rdp` 报错退出。
+- macOS 执行 `info` 给出的 `open 'rdp://…'` 命令；Windows 用 `mstsc /v:地址`。`agentdesk rdp` 只输出链接，也可在 Mac 上运行 `open "$(ssh 用户@服务器 agentdesk rdp)"`。隧道模式使用 `127.0.0.1:13389`；直连且取不到公网地址时报错退出。
 - **直连**：RDP 连 `服务器:端口`，会话选 Xorg；先在安全组或防火墙中只放行你的 IP。
 - **SSH 隧道**：`ssh -N -L 13389:127.0.0.1:3389 SSH_USER@SERVER`，RDP 连 `127.0.0.1:13389`。
 - 修改 RDP 配置不会断开现有会话；退出桌面后执行 `sudo systemctl restart xrdp` 生效。

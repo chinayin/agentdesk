@@ -581,7 +581,7 @@ class InfoTests(unittest.TestCase):
         self.assertIn("Connect (SSH tunnel)", result.stdout)
         self.assertIn("ssh -N -L 13389:127.0.0.1:3390 ubuntu@57.183.10.234", result.stdout)
         self.assertIn("Time zone       Etc/UTC", result.stdout)
-        self.assertIn("full address:s:127.0.0.1:13389", result.stdout)
+        self.assertIn("open 'rdp://full%20address=s%3A127.0.0.1%3A13389&username=s%3Adesk'", result.stdout)
         self.assertIn("mstsc /v:127.0.0.1:13389", result.stdout)
         self.assertNotIn("Connect (direct)", result.stdout)
 
@@ -592,7 +592,7 @@ class InfoTests(unittest.TestCase):
         self.assertIn("cloud console", result.stdout)
         self.assertIn("Local IPv4      172.31.20.80 172.17.0.1", result.stdout)
         self.assertNotIn("fe80", result.stdout)
-        for text in ["SERVER", "mstsc /v:", "printf 'full address", "ssh -N"]:
+        for text in ["SERVER", "mstsc /v:", "open 'rdp://", "ssh -N"]:
             self.assertNotIn(text, result.stdout)
 
     def test_cloud_metadata_fills_in_the_public_address(self):
@@ -601,10 +601,17 @@ class InfoTests(unittest.TestCase):
         self.assertIn("Public address  57.183.10.234", result.stdout)
         self.assertIn("Connect (direct)\n  Address       57.183.10.234:3389", result.stdout)
         self.assertIn("Allow your IP on TCP 3389", result.stdout)
-        self.assertIn("printf 'full address:s:57.183.10.234:3389\\nusername:s:desk\\n' > agentdesk.rdp", result.stdout)
+        self.assertIn("open 'rdp://full%20address=s%3A57.183.10.234%3A3389&username=s%3Adesk'", result.stdout)
         self.assertIn("mstsc /v:57.183.10.234:3389", result.stdout)
         self.assertNotIn("SERVER", result.stdout)
         self.assertNotIn("ssh ", result.stdout)
+        # 执行提示中的命令，只替换 macOS open 边界；链接必须是单个参数且不生成文件。
+        command = next(line.strip() for line in result.stdout.splitlines() if line.strip().startswith("open "))
+        opened = subprocess.run(["bash", "-c", 'open() { printf "%s\\n" "$@"; }; ' + command],
+                                cwd=self.base, text=True, capture_output=True)
+        self.assertEqual((opened.returncode, opened.stdout),
+                         (0, "rdp://full%20address=s%3A57.183.10.234%3A3389&username=s%3Adesk\n"))
+        self.assertFalse((self.base / "agentdesk.rdp").exists())
 
     def test_aliyun_hardened_metadata_fills_info_and_rdp(self):
         for path in ["eipv4", "public-ipv4"]:
@@ -615,7 +622,7 @@ class InfoTests(unittest.TestCase):
                 self.assertNotIn("ALI_TOKEN", result.stdout + result.stderr)
                 result = self.run_command("rdp", "0.0.0.0:3389", vendor="Alibaba Cloud", aliyun_address=path)
                 self.assertEqual((result.returncode, result.stdout),
-                                 (0, "full address:s:203.0.113.42:3389\nusername:s:desk\n"))
+                                 (0, "rdp://full%20address=s%3A203.0.113.42%3A3389&username=s%3Adesk\n"))
 
     def test_metadata_token_failure_leaves_address_unknown(self):
         for vendor in ["Amazon EC2", "Alibaba Cloud"]:
@@ -629,12 +636,14 @@ class InfoTests(unittest.TestCase):
         result = self.info("0.0.0.0:3389", vendor="QEMU")
         self.assertIn("Public address  unknown", result.stdout)
 
-    def test_rdp_file_uses_public_address_or_tunnel_port(self):
+    def test_rdp_url_uses_public_address_or_tunnel_port(self):
         result = self.run_command("rdp", "0.0.0.0:3389", vendor="Amazon EC2")
-        self.assertEqual((result.returncode, result.stdout), (0, "full address:s:57.183.10.234:3389\nusername:s:desk\n"))
+        self.assertEqual((result.returncode, result.stdout),
+                         (0, "rdp://full%20address=s%3A57.183.10.234%3A3389&username=s%3Adesk\n"))
         result = self.run_command("rdp", "127.0.0.1:3390")
-        self.assertEqual((result.returncode, result.stdout), (0, "full address:s:127.0.0.1:13389\nusername:s:desk\n"))
-        # 直连但拿不到公网地址：不输出带占位符的文件。
+        self.assertEqual((result.returncode, result.stdout),
+                         (0, "rdp://full%20address=s%3A127.0.0.1%3A13389&username=s%3Adesk\n"))
+        # 直连但拿不到公网地址：不输出带占位符的链接。
         result = self.run_command("rdp", "0.0.0.0:3389")
         self.assertEqual((result.returncode, result.stdout), (2, ""))
         self.assertIn("cannot find this server's public address", result.stderr)

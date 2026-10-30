@@ -103,7 +103,7 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 
 - `direct`（默认）监听 `0.0.0.0:PORT`，由用户在安全组或防火墙中限制来源 IP；`tunnel` 只监听 `127.0.0.1`，经 SSH 端口转发访问。
 - `verify` 从 `xrdp.ini` 读取实际监听，`[PASS]/[FAIL]` 输出到 stdout；它不代表外部可连，也不代表 GUI 验收通过。
-- `info` 按当前模式分组输出连接信息，`rdp` 输出 `.rdp` 文件，都写 stdout、不需要 root、不输出凭据。公网地址只读对应云平台元数据：AWS 和阿里云均携带令牌，请求绕过代理，其他厂商不发请求。取不到地址时，`info` 提示手动查找，`rdp` 报错退出。macOS 连接命令直接生成 `.rdp` 文件并打开 Windows App。
+- `info` 按当前模式分组输出连接信息，`rdp` 输出 `rdp://` 链接，都写 stdout、不需要 root、不输出凭据。公网地址只读对应云平台元数据：AWS 和阿里云均携带令牌，请求绕过代理，其他厂商不发请求。取不到地址时，`info` 提示手动查找，`rdp` 报错退出。macOS 用 `open` 打开链接，参数值中的冒号编码为 `%3A`。
 
 ## 7. 权限与安全
 

@@ -59,14 +59,14 @@ curl -x "$PROXY" -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main
 
 - **直连（默认）**：RDP 连接 `服务器:3389`，会话选 `Xorg`。先在安全组或防火墙中只放行你的 IP。
 - **SSH 隧道**（`--rdp-mode tunnel` 时必须用）：`ssh -N -L 13389:127.0.0.1:3389 用户@服务器`，再用 RDP 连接 `127.0.0.1:13389`。
-- **Mac 一条命令打开**（Windows App）：`ssh 用户@服务器 agentdesk rdp > agentdesk.rdp && open agentdesk.rdp`
+- **macOS / Windows App**：执行 `agentdesk info` 给出的 `open 'rdp://…'` 命令。
 
 ## 使用
 
 ```bash
 agentdesk --version                  # 查看已安装的版本
 agentdesk info                       # 查看连接方式
-agentdesk rdp                        # 输出 RDP 客户端可打开的 .rdp 文件
+agentdesk rdp                        # 输出 macOS 可打开的 RDP 链接
 agentdesk verify                     # 检查软件包、服务和 RDP 监听
 agentdesk install gemini kubectl     # 添加个人工具（Gemini CLI、Kubernetes CLI）
 agentdesk install apt:htop           # 添加 apt 系统软件包
