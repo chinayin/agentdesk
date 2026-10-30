@@ -68,8 +68,8 @@ agentdesk upgrade --system --proxy http://127.0.0.1:7890
 
 ## 2. 密码与登录
 
-- 桌面账户默认 `agentdesk`，可用 `--user NAME` 指定；SSH 仍使用原账户。
-- 安装器保留已有密码；没有密码时，安装后手动执行 `sudo passwd USER`。不修改 SSH 认证。
+- SSH 和桌面共用账户与密码，默认 `agentdesk`，可用 `--user NAME` 指定。
+- 安装器保留已有密码；没有密码时，安装后手动执行 `sudo passwd USER`。只为该账户启用 SSH 密码认证，保留原管理账户的登录方式。
 - 装完重新登录 SSH 或 RDP；当前终端要立即生效可执行 `. /etc/profile.d/agentdesk.sh`。
 
 ## 3. 连接
@@ -78,13 +78,15 @@ agentdesk upgrade --system --proxy http://127.0.0.1:7890
 - 公网地址从 AWS、阿里云实例元数据读取；读取失败时提示手动查找地址，不输出带占位符的命令。
 - macOS 执行 `info` 给出的 `open 'rdp://…'` 命令；Windows 用 `mstsc /v:地址`。`agentdesk rdp` 只输出链接，也可在 Mac 上运行 `open "$(ssh 用户@服务器 agentdesk rdp)"`。隧道模式使用 `127.0.0.1:13389`；直连且取不到公网地址时报错退出。
 - **直连**：RDP 连 `服务器:端口`，会话选 Xorg；先在安全组或防火墙中只放行你的 IP。
-- **SSH 隧道**：`ssh -N -L 13389:127.0.0.1:3389 SSH_USER@SERVER`，RDP 连 `127.0.0.1:13389`。
+- **SSH 终端**：`ssh agentdesk@服务器`（或 `--user` 指定的账户）；TCP 22 只放行你的 IP。
+- **SSH 隧道**：`ssh -N -L 13389:127.0.0.1:3389 用户@服务器`，RDP 连 `127.0.0.1:13389`。
 - 修改 RDP 配置不会断开现有会话；退出桌面后执行 `sudo systemctl restart xrdp` 生效。
 - **输入**：XFCE 终端复制粘贴用 `Ctrl+Shift+C/V`。Mac 上的 Windows App 可以把键盘模式切换为 Scancode 或 Unicode，符号输入丢失 Shift 时改用 Unicode（见 [Microsoft 文档](https://learn.microsoft.com/en-us/windows-app/input-keyboard-mouse-touch-pen?tabs=macos)）。中文用 Fcitx5 拼音，从顶栏输入法菜单切换。
 
 ## 4. 桌面维护
 
 命令默认使用 `agentdesk.yaml` 中保存的用户和参数。
+`verify` 检查本机 SSH/RDP 服务、监听、账户密码和 SSH 认证配置；外部登录仍需实测。
 
 ```bash
 agentdesk verify                   # [PASS]/[FAIL] 输出到 stdout

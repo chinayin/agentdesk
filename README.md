@@ -29,7 +29,7 @@ Run on the server:
 curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash
 ```
 
-This installs the latest release with `agentdesk` as the default desktop account. After installation, run `sudo passwd USER` for the desktop account shown in the output.
+This installs the latest release with `agentdesk` as the default SSH and desktop account. After installation, run `sudo passwd USER` for the account shown in the output; SSH and RDP use the same password.
 
 Options go after `bash -s --`:
 
@@ -39,7 +39,7 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 
 | Option | Default | Description |
 |---|---|---|
-| `--user NAME` | `agentdesk` | Desktop account; created if missing |
+| `--user NAME` | `agentdesk` | SSH and desktop account; created if missing |
 | `--rdp-mode tunnel` | `direct` | Listen on 127.0.0.1 only, reach it through an SSH tunnel |
 | `--locale zh_CN.UTF-8` | `en_US.UTF-8` | Desktop language |
 | `--proxy URL` | | HTTP(S) proxy for this run only, see below |
@@ -60,6 +60,7 @@ The installer ends by printing the connection steps for your server, and `agentd
 - **Direct (default)**: RDP to `SERVER:3389`, session `Xorg`. Allow only your IP in the security group or firewall first.
 - **SSH tunnel** (required with `--rdp-mode tunnel`): `ssh -N -L 13389:127.0.0.1:3389 USER@SERVER`, then RDP to `127.0.0.1:13389`.
 - **macOS / Windows App**: run the `open 'rdp://…'` command shown by `agentdesk info`.
+- **SSH terminal**: `ssh agentdesk@SERVER` (or your `--user` account). Allow your IP on TCP 22.
 
 ## Usage
 
@@ -67,7 +68,7 @@ The installer ends by printing the connection steps for your server, and `agentd
 agentdesk --version                  # show the installed version
 agentdesk info                       # show how to connect
 agentdesk rdp                        # print an RDP URL for macOS
-agentdesk verify                     # check packages, services and the RDP listener
+agentdesk verify                     # check packages, SSH and RDP
 agentdesk install gemini kubectl     # add personal tools (Gemini CLI, Kubernetes CLI)
 agentdesk install apt:htop           # add a system package from apt
 agentdesk upgrade                    # upgrade your personal software

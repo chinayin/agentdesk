@@ -29,7 +29,7 @@ Ubuntu 22.04 / 24.04 / 26.04 或 Debian 12 / 13，amd64 或 arm64，systemd，�
 curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash
 ```
 
-安装最新发布版本，默认桌面账户为 `agentdesk`。安装后按输出提示执行 `sudo passwd 用户名` 设置桌面密码。
+安装最新发布版本，默认 SSH 和桌面账户为 `agentdesk`。安装后按提示执行 `sudo passwd 用户名`，SSH 和 RDP 共用这个密码。
 
 参数写在 `bash -s --` 之后：
 
@@ -39,7 +39,7 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
-| `--user NAME` | `agentdesk` | 桌面账户，不存在时创建 |
+| `--user NAME` | `agentdesk` | SSH 和桌面账户，不存在时创建 |
 | `--rdp-mode tunnel` | `direct` | 只监听 127.0.0.1，经 SSH 隧道连接 |
 | `--locale zh_CN.UTF-8` | `en_US.UTF-8` | 桌面语言 |
 | `--proxy URL` | | 本次运行使用的 HTTP(S) 代理，见下文 |
@@ -60,6 +60,7 @@ curl -x "$PROXY" -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main
 - **直连（默认）**：RDP 连接 `服务器:3389`，会话选 `Xorg`。先在安全组或防火墙中只放行你的 IP。
 - **SSH 隧道**（`--rdp-mode tunnel` 时必须用）：`ssh -N -L 13389:127.0.0.1:3389 用户@服务器`，再用 RDP 连接 `127.0.0.1:13389`。
 - **macOS / Windows App**：执行 `agentdesk info` 给出的 `open 'rdp://…'` 命令。
+- **SSH 终端**：`ssh agentdesk@服务器`（或 `--user` 指定的账户）。TCP 22 只放行你的 IP。
 
 ## 使用
 
@@ -67,7 +68,7 @@ curl -x "$PROXY" -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main
 agentdesk --version                  # 查看已安装的版本
 agentdesk info                       # 查看连接方式
 agentdesk rdp                        # 输出 macOS 可打开的 RDP 链接
-agentdesk verify                     # 检查软件包、服务和 RDP 监听
+agentdesk verify                     # 检查软件包、SSH 和 RDP
 agentdesk install gemini kubectl     # 添加个人工具（Gemini CLI、Kubernetes CLI）
 agentdesk install apt:htop           # 添加 apt 系统软件包
 agentdesk upgrade                    # 升级个人软件

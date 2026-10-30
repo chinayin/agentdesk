@@ -16,10 +16,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # mise 与产品相同，经 extrepo 从官方 apt 源安装。
-      - name: Install ShellCheck and mise
+      - name: Install ShellCheck, OpenSSH and mise
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends shellcheck extrepo
+          sudo apt-get install -y -qq --no-install-recommends shellcheck extrepo openssh-server
+          sudo mkdir -p /run/sshd
           sudo extrepo enable mise
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends mise

@@ -17,6 +17,10 @@ AGENTDESK_REPO="chinayin/agentdesk"
 SETTINGS_FILE=/etc/agentdesk/agentdesk.yaml
 XRDP_INI=/etc/xrdp/xrdp.ini
 SYS_VENDOR_FILE=/sys/class/dmi/id/sys_vendor
+SSHD=/usr/sbin/sshd
+SSHD_CONFIG=/etc/ssh/sshd_config
+SSHD_DROPIN=/etc/ssh/sshd_config.d/00-agentdesk.conf
+SSHD_RUNTIME_DIR=/run/sshd
 
 die() { echo "Error: $*" >&2; exit 1; }
 missing() { echo "Error: $*" >&2; exit 2; }
@@ -59,7 +63,7 @@ Turn this server into an XFCE/xrdp remote desktop with mise-managed software.
 
 Commands:
   init               Install or reconfigure the desktop
-  verify             Check packages, services and the RDP listener
+  verify             Check packages, SSH and RDP
   info               Show how to connect to this desktop
   rdp                Print an RDP URL (macOS: open "$(ssh HOST agentdesk rdp)")
   install [NAME...]  Add software to your list, or install what is missing
@@ -69,7 +73,7 @@ Commands:
   update             Update AgentDesk itself
 
 Init options (saved to /etc/agentdesk/agentdesk.yaml and reused later):
-  --user NAME        Desktop user (default: agentdesk; saved settings take precedence)
+  --user NAME        SSH and desktop user (default: agentdesk; saved settings take precedence)
   --theme NAME       whitesur | none (default: whitesur)
   --rdp-mode MODE    direct | tunnel (default: direct)
   --rdp-port PORT    RDP port (default: 3389)
@@ -316,7 +320,7 @@ install_packages() {
   run env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install \
     -y --no-install-recommends --no-upgrade \
     ca-certificates curl wget git gnupg sudo unzip tar gzip xz-utils bzip2 zstd \
-    python3 python3-venv build-essential openssh-client rsync file sed gawk \
+    python3 python3-venv build-essential openssh-client openssh-server rsync file sed gawk \
     gettext-base tzdata less procps iproute2 locales fontconfig \
     xfce4 xfce4-terminal xfce4-whiskermenu-plugin xfce4-notifyd gvfs \
     xrdp xorgxrdp dbus-x11 dbus-user-session x11-xserver-utils \
@@ -370,9 +374,100 @@ configure_account() {
   if [ "$DRY_RUN" -eq 1 ]; then
     info "dry-run: preserve desktop password"
   elif [ "$(passwd -S "$DESKTOP_USER" | awk '{print $2}')" != P ]; then
-    warn "RDP login is not ready: run sudo passwd $DESKTOP_USER before connecting"
+    warn "SSH and RDP password login is not ready: run sudo passwd $DESKTOP_USER before connecting"
   fi
 }
+
+# 仅为工作账户启用密码认证；Match all 结束作用域，后续配置继续正常解析。
+render_ssh() {
+  cat <<EOF
+# Managed by AgentDesk.
+Match User $DESKTOP_USER
+    PasswordAuthentication yes
+    AuthenticationMethods any
+    PermitEmptyPasswords no
+Match all
+EOF
+}
+
+ssh_password_enabled() {
+  local effective
+  effective="$("$SSHD" -T -f "$SSHD_CONFIG" \
+    -C "user=${DESKTOP_USER},host=client,addr=192.0.2.2,laddr=192.0.2.1,lport=22")" || return 1
+  awk '
+    $1 == "passwordauthentication" { password = ($2 == "yes") }
+    $1 == "permitemptypasswords" { nonempty = ($2 == "no") }
+    $1 == "authenticationmethods" {
+      for (i = 2; i <= NF; i++) if ($i == "any" || $i == "password") single = 1
+    }
+    END { exit !(password && nonempty && single) }
+  ' <<< "$effective"
+}
+
+# 只支持主配置在首个 Match 前直接 Include 受管文件或标准目录通配符。
+ssh_dropin_included() {
+  awk -v file="$SSHD_DROPIN" -v pattern="${SSHD_DROPIN%/*}/*.conf" '
+    tolower($1) ~ /^match(=|$)/ { exit }
+    tolower($1) == "include" {
+      for (i = 2; i <= NF && $i !~ /^#/; i++) {
+        path = $i; gsub(/^"|"$/, "", path)
+        if (path == file || path == pattern) found = 1
+      }
+    }
+    END { exit !found }
+  ' "$SSHD_CONFIG"
+}
+
+configure_ssh() (
+  set -euo pipefail
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dry-run: enable SSH password login for $DESKTOP_USER in $SSHD_DROPIN"
+    return
+  fi
+  local directory="${SSHD_DROPIN%/*}" item work changed=0 reload_attempted=0
+  for item in "${SSHD_CONFIG%/*}" "$SSHD_CONFIG" "$directory" "$SSHD_DROPIN" "$SSHD_RUNTIME_DIR"; do
+    [ ! -L "$item" ] || missing "refusing symlinked SSH configuration: $item"
+    if [ -e "$item" ]; then
+      [ "$(stat -c %u "$item")" = 0 ] &&
+        [ "$((8#$(stat -c %a "$item") & 022))" -eq 0 ] || missing "unsafe SSH configuration: $item"
+    fi
+  done
+  [ ! -e "$SSHD_DROPIN" ] || [ -f "$SSHD_DROPIN" ] || missing "not a regular file: $SSHD_DROPIN"
+  ssh_dropin_included || missing "SSH requires a global Include ${directory}/*.conf before any Match in $SSHD_CONFIG"
+  install -d -m 0755 "$SSHD_RUNTIME_DIR"
+  "$SSHD" -t -f "$SSHD_CONFIG"
+  install -d -m 0755 "$directory"
+  work="$(mktemp -d)"
+  # EXIT trap 调用。
+  # shellcheck disable=SC2329
+  restore_ssh() {
+    local status=$?
+    if [ "$status" -ne 0 ] && [ "$changed" -eq 1 ]; then
+      if [ -f "$work/previous" ]; then cp -p "$work/previous" "$SSHD_DROPIN"; else rm -f "$SSHD_DROPIN"; fi
+      if [ "$reload_attempted" -eq 1 ]; then systemctl reload ssh >/dev/null 2>&1 || true; fi
+      warn "SSH configuration restored after failure"
+    fi
+    rm -rf "$work"
+  }
+  trap restore_ssh EXIT
+  render_ssh > "$work/new"
+  if ! cmp -s "$work/new" "$SSHD_DROPIN"; then
+    [ ! -f "$SSHD_DROPIN" ] || cp -p "$SSHD_DROPIN" "$work/previous"
+    changed=1
+    install -m 0644 "$work/new" "$SSHD_DROPIN"
+  fi
+  "$SSHD" -t -f "$SSHD_CONFIG"
+  ssh_password_enabled || missing "SSH password login is blocked for $DESKTOP_USER; check Include and Match rules in $SSHD_CONFIG"
+  if systemctl is-active --quiet ssh; then
+    if [ "$changed" -eq 1 ]; then
+      reload_attempted=1
+      systemctl reload ssh
+    fi
+  elif ! systemctl is-active --quiet ssh.socket; then
+    systemctl enable --now ssh
+  fi
+  info "SSH password authentication enabled for $DESKTOP_USER"
+)
 
 configure_rdp() (
   set -euo pipefail
@@ -535,6 +630,7 @@ initialize() {
   fi
   install_packages
   configure_account
+  configure_ssh
   configure_locale
   install_mise
   configure_rdp
@@ -615,9 +711,8 @@ show_rdp() {
 # 不输出任何凭据。
 show_info() {
   local conn_endpoint conn_port conn_mode conn_server conn_target
-  local password="" addresses zone ssh_user="${SUDO_USER:-${USER:-}}"
+  local password="" addresses zone
   load_connection
-  [ -n "$ssh_user" ] && [ "$ssh_user" != root ] || ssh_user=SSH_USER
   # 只有 root 能读其他账户的密码状态。
   if [ "$EUID" -eq 0 ]; then
     if password_ready "$DESKTOP_USER"; then
@@ -631,7 +726,7 @@ show_info() {
   cat <<EOF
 AgentDesk $VERSION
 
-Desktop user    ${DESKTOP_USER}${password}
+Login user      ${DESKTOP_USER}${password}
 RDP listener    ${conn_endpoint} (${conn_mode})
 Public address  ${conn_server:-unknown}
 Time zone       ${zone:-unknown}
@@ -650,9 +745,8 @@ EOF
     cat <<EOF
 Connect (SSH tunnel)
   Start on your computer and leave running:
-    ssh -N -L 13389:127.0.0.1:${conn_port} ${ssh_user}@${conn_server}
+    ssh -N -L 13389:127.0.0.1:${conn_port} ${DESKTOP_USER}@${conn_server}
 EOF
-    [ "$ssh_user" != SSH_USER ] || echo "  Replace SSH_USER with your SSH login user."
   else
     echo "Connect (direct)"
   fi
@@ -669,6 +763,10 @@ On your computer (choose one)
 
   Windows:
     mstsc /v:${conn_target}
+
+SSH terminal (same user and password)
+  ssh ${DESKTOP_USER}@${conn_server}
+  Allow your IP on TCP 22 in the security group or firewall.
 EOF
 }
 
@@ -688,6 +786,14 @@ listener_ready() {
   ss -H -ltn | listener_matches "$1"
 }
 
+ssh_active() {
+  systemctl is-active --quiet ssh || systemctl is-active --quiet ssh.socket
+}
+
+ssh_listener_ready() {
+  ss -H -ltn | awk '$4 ~ /:22$/ { found=1 } END { exit !found }'
+}
+
 # 读取 init 写入 xrdp.ini 的 tcp://地址:端口。
 xrdp_endpoint() {
   awk '
@@ -704,7 +810,7 @@ xrdp_endpoint() {
 
 verify() {
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "dry-run: check packages, mise, account, session files, services and RDP listener"
+    info "dry-run: check packages, mise, account, session files, SSH and RDP"
     return
   fi
   local failures=0 package endpoint
@@ -718,13 +824,16 @@ verify() {
       failures=$((failures + 1))
     fi
   }
-  for package in xfce4 gvfs gvfs-daemons xrdp xorgxrdp fcitx5 fcitx5-chinese-addons fonts-noto-cjk librsvg2-common mise; do
+  for package in xfce4 gvfs gvfs-daemons xrdp xorgxrdp openssh-server fcitx5 fcitx5-chinese-addons fonts-noto-cjk librsvg2-common mise; do
     check "$package installed" package_installed "$package"
   done
   check "xrdp active" systemctl is-active --quiet xrdp
   check "xrdp enabled" systemctl is-enabled --quiet xrdp
   check "xrdp-sesman active" systemctl is-active --quiet xrdp-sesman
-  check "desktop password set" password_ready "$DESKTOP_USER"
+  check "SSH active" ssh_active
+  check "SSH listener TCP 22" ssh_listener_ready
+  check "SSH password authentication for $DESKTOP_USER" ssh_password_enabled
+  check "SSH and RDP password set" password_ready "$DESKTOP_USER"
   check "desktop defaults present" test -f /etc/xdg/agentdesk/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml
   check "desktop session environment present" test -f /etc/X11/Xsession.d/21agentdesk
   check "login environment present" test -f /etc/profile.d/agentdesk.sh
@@ -739,7 +848,7 @@ verify() {
   else
     check "RDP listener configured in $XRDP_INI" false
   fi
-  info "GUI login, Chinese input, installed apps and external firewall still require manual verification"
+  info "External SSH password login, GUI login, Chinese input, installed apps and firewall still require manual verification"
   info "Connection details: agentdesk info"
   [ "$failures" -eq 0 ]
 }

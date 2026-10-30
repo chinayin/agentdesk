@@ -20,9 +20,10 @@ desktop_user() {
 verify() {
   # 不传参数：用户来自 /etc/agentdesk/agentdesk.yaml，监听来自 xrdp.ini。
   agentdesk verify
-  # 连接信息：tunnel 模式给出 SSH 端口转发；普通用户也能查看。
+  # 容器没有云端公网地址；tunnel 链接仍可生成，普通用户也能查看。
   agentdesk info | tee "$REPORT/info.txt"
-  grep -q 'ssh -N -L 13389:127.0.0.1:' "$REPORT/info.txt"
+  grep -q 'Connection address unavailable' "$REPORT/info.txt"
+  agentdesk rdp | grep -q '127.0.0.1%3A13389'
   grep -q '(password set)' "$REPORT/info.txt"
   desktop_user agentdesk info > /dev/null
   for tool in git node python go pnpm uv claude codex pi gh glab aws aliyun cloudflared \

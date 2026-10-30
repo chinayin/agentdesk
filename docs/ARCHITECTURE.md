@@ -31,7 +31,7 @@ flowchart TD
     C --> P["参数：命令行 > /etc/agentdesk/agentdesk.yaml > 默认值；检查系统，非 root 时经 sudo 重新执行"]
     P --> M["首次安装临时 mask xrdp，监听配置写好前不对外开放"]
     M --> K["apt 安装基础包、XFCE、xrdp、字体、输入法（不做全机升级）；生成 en_US、zh_CN locale"]
-    K --> U["创建或复用桌面账户；密码由用户手动设置"]
+    K --> U["创建或复用 SSH/桌面账户；启用该账户的 SSH 密码认证，密码由用户手动设置"]
     U --> Z["extrepo 启用 mise 官方 apt 源，安装或升级 mise"]
     Z --> R["写 xrdp.ini 监听地址与端口"]
     R --> I["复制程序到 /usr/local/lib/agentdesk；覆盖 /etc/mise/config.toml"]
@@ -49,6 +49,7 @@ flowchart TD
 /usr/local/bin/agentdesk -> /usr/local/lib/agentdesk/agentdesk.sh
 /usr/local/lib/agentdesk/            # 程序，root 所有
 /etc/agentdesk/agentdesk.yaml        # init 保存的参数
+/etc/ssh/sshd_config.d/00-agentdesk.conf # 工作账户的 SSH 密码认证
 /etc/xdg/agentdesk/                  # 桌面系统默认值（XFCE、Fcitx5、自启动）
 /etc/X11/Xsession.d/21agentdesk      # 图形会话：XDG_CONFIG_DIRS、语言、独立 D-Bus
 /etc/X11/Xsession.d/90agentdesk-input
@@ -102,7 +103,8 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 ## 6. 远程连接
 
 - `direct`（默认）监听 `0.0.0.0:PORT`，由用户在安全组或防火墙中限制来源 IP；`tunnel` 只监听 `127.0.0.1`，经 SSH 端口转发访问。
-- `verify` 从 `xrdp.ini` 读取实际监听，`[PASS]/[FAIL]` 输出到 stdout；它不代表外部可连，也不代表 GUI 验收通过。
+- `verify` 检查 SSH 服务或 socket、TCP 22、工作账户的有效认证配置和密码状态，以及 xrdp 服务与 `xrdp.ini` 的实际监听；`[PASS]/[FAIL]` 输出到 stdout，外部 SSH/RDP 登录仍需实测。
+- SSH 用 `00-agentdesk.conf` 中的 `Match User` 只为工作账户启用密码认证、禁止空密码；切换 `--user` 会替换旧规则。要求主配置在首个 `Match` 前全局 Include 受管文件或 `sshd_config.d/*.conf`，写入后先检查语法和有效配置，再 reload，失败恢复原文件。其他账户的认证配置保留。
 - `info` 按当前模式分组输出连接信息，`rdp` 输出 `rdp://` 链接，都写 stdout、不需要 root、不输出凭据。公网地址只读对应云平台元数据：AWS 和阿里云均携带令牌，请求绕过代理，其他厂商不发请求。取不到地址时，`info` 提示手动查找，`rdp` 报错退出。macOS 用 `open` 打开链接，参数值中的冒号编码为 `%3A`。
 
 ## 7. 权限与安全
@@ -111,9 +113,9 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 - 代理只透传已设置的 `http_proxy`、`https_proxy`、`all_proxy`、`no_proxy`。`--proxy URL` 只在本次运行导出这些变量，不保存（地址可能含密码，而设置文件所有人可读）；只接受 `http(s)://`（apt 不支持 SOCKS）。
 - 不提供下载镜像：网络不通时用 `--proxy`，它一次覆盖全部下载；镜像只能覆盖 AgentDesk 自己的文件。
 - `agentdesk.yaml` 由 root 写入，0644，不含凭据，按行解析，不当作脚本执行。
-- 默认桌面账户为 `agentdesk`，已有设置优先，`--user` 可覆盖。新账户加入 sudo 组（需要密码），直连 RDP 须限制来源 IP。
+- 默认 SSH/桌面账户为 `agentdesk`，已有设置优先，`--user` 可覆盖。新账户加入 sudo 组（需要密码），SSH 和直连 RDP 须限制来源 IP。
 - 拒绝符号链接形式、非 root 所有或组/其他可写的安装目录和系统配置；`/usr/local/bin/agentdesk` 不是受管软链时拒绝覆盖。
-- 不自动生成密码，不修改 SSH 认证、防火墙或云安全组，不自动重启运行中的 xrdp。
+- 不自动生成密码，不修改防火墙或云安全组，不自动重启运行中的 xrdp。
 
 ## 8. 版本与更新
 

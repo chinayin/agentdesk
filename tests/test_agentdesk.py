@@ -234,6 +234,8 @@ class HostTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(list(Path(tmp).iterdir()), [])
             self.assertIn("xorgxrdp", result.stderr)
+            self.assertIn("openssh-server", result.stderr)
+            self.assertIn("enable SSH password login for desk", result.stderr)
             self.assertIn("/etc/xdg/agentdesk", result.stderr)
             self.assertIn("agentdesk.yaml", result.stderr)
 
@@ -576,10 +578,10 @@ class InfoTests(unittest.TestCase):
     def test_tunnel_mode_prints_ssh_forward(self):
         result = self.info("127.0.0.1:3390", vendor="Amazon EC2")
         self.assertEqual((result.returncode, result.stderr), (0, ""))
-        self.assertIn("Desktop user    desk\n", result.stdout)
+        self.assertIn("Login user      desk\n", result.stdout)
         self.assertIn("RDP listener    127.0.0.1:3390 (tunnel)", result.stdout)
         self.assertIn("Connect (SSH tunnel)", result.stdout)
-        self.assertIn("ssh -N -L 13389:127.0.0.1:3390 ubuntu@57.183.10.234", result.stdout)
+        self.assertIn("ssh -N -L 13389:127.0.0.1:3390 desk@57.183.10.234", result.stdout)
         self.assertIn("Time zone       Etc/UTC", result.stdout)
         self.assertIn("open 'rdp://full%20address=s%3A127.0.0.1%3A13389&username=s%3Adesk'", result.stdout)
         self.assertIn("mstsc /v:127.0.0.1:13389", result.stdout)
@@ -604,7 +606,8 @@ class InfoTests(unittest.TestCase):
         self.assertIn("open 'rdp://full%20address=s%3A57.183.10.234%3A3389&username=s%3Adesk'", result.stdout)
         self.assertIn("mstsc /v:57.183.10.234:3389", result.stdout)
         self.assertNotIn("SERVER", result.stdout)
-        self.assertNotIn("ssh ", result.stdout)
+        self.assertIn("ssh desk@57.183.10.234", result.stdout)
+        self.assertNotIn("ssh ubuntu@", result.stdout)
         # 执行提示中的命令，只替换 macOS open 边界；链接必须是单个参数且不生成文件。
         command = next(line.strip() for line in result.stdout.splitlines() if line.strip().startswith("open "))
         opened = subprocess.run(["bash", "-c", 'open() { printf "%s\\n" "$@"; }; ' + command],
@@ -648,10 +651,11 @@ class InfoTests(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout), (2, ""))
         self.assertIn("cannot find this server's public address", result.stderr)
 
-    def test_root_login_uses_placeholder_ssh_user(self):
+    def test_root_install_still_prints_work_account_for_ssh(self):
         result = self.info("127.0.0.1:3390", user="root", vendor="Amazon EC2")
-        self.assertIn("SSH_USER@57.183.10.234", result.stdout)
-        self.assertIn("Replace SSH_USER", result.stdout)
+        self.assertIn("desk@57.183.10.234", result.stdout)
+        self.assertNotIn("root@", result.stdout)
+        self.assertNotIn("SSH_USER", result.stdout)
 
     def test_uninitialized_host_is_reported(self):
         result = self.info("127.0.0.1:3390", settings=self.base / "absent.yaml")
