@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 | `--locale zh_CN.UTF-8` | `en_US.UTF-8` | Desktop language |
 | `--proxy URL` | | HTTP(S) proxy for this run only, see below |
 
-Options are saved and reused when you re-run the installer or `agentdesk update`. All options are in the [User Guide](docs/USER_GUIDE.md).
+Options are saved and reused when you re-run the installer or `agentdesk init`. All options are in the [User Guide](docs/USER_GUIDE.md).
 
 If the server needs a proxy to reach GitHub, give it to both `curl` and the installer (`sudo` drops exported proxy variables):
 
@@ -75,17 +75,18 @@ agentdesk upgrade                    # upgrade your personal software
 agentdesk upgrade --system           # upgrade shared tools and apps (admin)
 agentdesk run TASK                   # run a task from your personal mise config
 agentdesk desktop-reset --force      # reset your desktop to the defaults
-agentdesk update                     # update AgentDesk itself to the latest release
+agentdesk update                     # update AgentDesk program files only
+sudo agentdesk init                  # apply host configuration and install missing software
 agentdesk --help
 ```
 
-`update` and `upgrade` follow Homebrew: `update` refreshes AgentDesk and the config it maintains, `upgrade` upgrades installed software.
+`update` replaces AgentDesk program files, `init` applies host configuration, and `upgrade` upgrades installed software.
 
 Software lists are plain mise config, merged natively by mise:
 
 | File | Maintained by |
 |---|---|
-| `/etc/mise/config.toml` | AgentDesk, replaced on `agentdesk update` |
+| `/etc/mise/config.toml` | AgentDesk, replaced on `agentdesk init` |
 | `/etc/mise/config.local.toml` | the host admin (`agentdesk install --system NAME`) |
 | `~/.config/mise/config.toml` | each user (`agentdesk install NAME`) |
 

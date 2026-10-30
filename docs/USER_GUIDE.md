@@ -111,7 +111,7 @@ agentdesk upgrade --system                    # 管理员：升级全机共享�
 
 | 文件 | 谁改 | 说明 |
 |---|---|---|
-| `/etc/mise/config.toml` | AgentDesk | 通用清单，`update` 和重跑 init 时直接覆盖，**不要手改** |
+| `/etc/mise/config.toml` | AgentDesk | 通用清单，重跑 init 时直接覆盖，**不要手改** |
 | `/etc/mise/config.local.toml` | 本机管理员 | 增补，或用同名条目覆盖通用清单的版本（如 `node = "22"`） |
 | `~/.config/mise/config.toml` | 每个用户 | 个人软件，与 `mise use -g` 同一文件 |
 
@@ -133,13 +133,19 @@ agentdesk upgrade --system                    # 管理员：升级全机共享�
 
 ```bash
 agentdesk --version            # 当前版本
-agentdesk update               # 更新到最新发布版本（相当于 brew update）
+agentdesk update               # 只更新 AgentDesk 程序到最新发布版本
 agentdesk update --ref main    # 跟随开发分支，或 --ref vX.Y.Z 指定版本
 agentdesk update --dry-run     # 只打印计划
 ```
 
-- update 按 `agentdesk.yaml` 重跑新版本的 init：替换程序、通用清单和桌面默认值，补装新增软件；不升级已装软件（那是 `upgrade`），不改 `config.local.toml`、个人清单、密码和个人桌面设置。
-- 已是最新时只提示；显式 `--ref` 时总是重装。没有设置文件时拒绝执行，先带原参数重跑一次安装命令。
+- `update` 只替换程序和随附资源，不应用主机配置、不安装或升级软件。需要应用新配置时运行 `sudo agentdesk init`；升级软件用 `agentdesk upgrade` 或 `sudo agentdesk upgrade --system`。
+- 已是最新时只提示；显式 `--ref` 时总是更新。不支持只更新程序的旧目标版本会被拒绝。
+
+旧版 `update` 会重跑 init。首次切换到独立更新，用新版入口：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash -s -- --ref main --update-only
+```
 
 ## 8. 退出码
 

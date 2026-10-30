@@ -490,18 +490,30 @@ configure_rdp() (
 )
 
 install_program() {
-  local destination=/usr/local/lib/agentdesk item mode
-  local directories=(/usr/local /usr/local/lib /usr/local/bin "$destination" /etc/mise "${SETTINGS_FILE%/*}")
+  local program_only="${1:-0}" root="${2:-}" item mode parent
+  local destination="$root/usr/local/lib/agentdesk" link="$root/usr/local/bin/agentdesk"
+  local software_config="$root/etc/mise/config.toml"
+  local directories=("$root/usr/local" "$root/usr/local/lib" "$root/usr/local/bin" "$destination")
+  if [ "$program_only" -eq 0 ]; then directories+=("$root/etc/mise" "${SETTINGS_FILE%/*}"); fi
   if [ "$DRY_RUN" -eq 1 ]; then
     info "dry-run: install root-owned program at $destination; link /usr/local/bin/agentdesk"
-    info "dry-run: replace AgentDesk-managed /etc/mise/config.toml; keep /etc/mise/config.local.toml"
+    if [ "$program_only" -eq 0 ]; then
+      info "dry-run: replace AgentDesk-managed /etc/mise/config.toml; keep /etc/mise/config.local.toml"
+    fi
     return
   fi
   local listing files=()
   listing="$(program_files "$SCRIPT_DIR")" || exit "$?"
   while IFS= read -r item; do files+=("$item"); done <<< "$listing"
   for item in "${files[@]}"; do
-    case "$item" in */*) directories+=("$destination/${item%/*}") ;; esac
+    case "$item" in
+      */*)
+        parent="$destination/${item%/*}"
+        while [ "$parent" != "$destination" ]; do
+          directories+=("$parent")
+          parent="${parent%/*}"
+        done ;;
+    esac
   done
   for item in "${directories[@]}"; do
     [ ! -L "$item" ] || missing "refusing symlinked installation directory: $item"
@@ -510,17 +522,17 @@ install_program() {
         [ "$((8#$(stat -c %a "$item") & 022))" -eq 0 ] || missing "unsafe installation directory: $item"
     fi
   done
-  if [ -e /usr/local/bin/agentdesk ] || [ -L /usr/local/bin/agentdesk ]; then
-    [ -L /usr/local/bin/agentdesk ] &&
-      [ "$(readlink /usr/local/bin/agentdesk)" = "$destination/agentdesk.sh" ] ||
-      missing "/usr/local/bin/agentdesk already exists and is not the managed link"
+  if [ -e "$link" ] || [ -L "$link" ]; then
+    [ -L "$link" ] &&
+      [ "$(readlink "$link")" = "$destination/agentdesk.sh" ] ||
+      missing "$link already exists and is not the managed link"
   fi
   for item in "${files[@]}"; do
     [ -f "$SCRIPT_DIR/$item" ] && [ ! -L "$SCRIPT_DIR/$item" ] || missing "program file missing or symlinked: $item"
     [ ! -L "$destination/$item" ] || missing "refusing symlinked program file: $item"
   done
-  if [ -e /etc/mise/config.toml ] || [ -L /etc/mise/config.toml ]; then
-    [ ! -L /etc/mise/config.toml ] && [ -f /etc/mise/config.toml ] || missing "unsafe /etc/mise/config.toml"
+  if [ "$program_only" -eq 0 ] && { [ -e "$software_config" ] || [ -L "$software_config" ]; }; then
+    [ ! -L "$software_config" ] && [ -f "$software_config" ] || missing "unsafe $software_config"
   fi
   # 前两项 /usr/local、/usr/local/lib 只做检查，不改其权限。
   install -d -m 0755 "${directories[@]:2}"
@@ -531,14 +543,20 @@ install_program() {
       install -m "$mode" "$SCRIPT_DIR/$item" "$destination/$item"
     done
   fi
-  if [ ! -L /usr/local/bin/agentdesk ]; then
-    ln -s "$destination/agentdesk.sh" /usr/local/bin/agentdesk
+  if [ ! -L "$link" ]; then
+    ln -s "$destination/agentdesk.sh" "$link"
   fi
+  [ "$program_only" -eq 0 ] || return 0
   # 通用清单随版本直接覆盖；本机增补在 config.local.toml。
-  if ! cmp -s "$SCRIPT_DIR/mise.toml" /etc/mise/config.toml; then
-    install -m 0644 "$SCRIPT_DIR/mise.toml" /etc/mise/config.toml
-    info "Installed AgentDesk software list: /etc/mise/config.toml"
+  if ! cmp -s "$SCRIPT_DIR/mise.toml" "$software_config"; then
+    install -m 0644 "$SCRIPT_DIR/mise.toml" "$software_config"
+    info "Installed AgentDesk software list: $software_config"
   fi
+}
+
+# install.sh 的独立更新入口；旧版本没有此入口时必须拒绝，不能退回 init。
+install_program_only() {
+  install_program 1
 }
 
 # WhiteSur 主题固定提交，不跟随默认分支更新。
@@ -1057,7 +1075,7 @@ software_main() (
   fi
 )
 
-# 自我更新（对应 brew update）：下载交给已安装的 install.sh，再按设置文件重跑 init。
+# 自我更新只替换程序；主机配置由 init 应用，软件由 upgrade 升级。
 # explicit=1 表示显式 --ref，版本相同也重装。
 update_to_ref() {
   local ref="$1" explicit="$2"
@@ -1066,7 +1084,7 @@ update_to_ref() {
     return
   fi
   info "Updating agentdesk $VERSION -> ${ref#v}"
-  bash "$SCRIPT_DIR/install.sh" --remote --ref "$ref"
+  bash "$SCRIPT_DIR/install.sh" --remote --update-only --ref "$ref"
 }
 
 self_update() {
@@ -1087,11 +1105,8 @@ self_update() {
     esac
   done
   [ -z "$ref" ] || [[ "$ref" =~ ^[A-Za-z0-9._/-]+$ ]] || die "invalid ref: ${ref}"
-  # 无设置文件时用默认值重跑 init 可能把 tunnel 改回直连，因此拒绝。
-  [ -r "$SETTINGS_FILE" ] ||
-    missing "settings not found: $SETTINGS_FILE; rerun install.sh once with your original options"
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "dry-run: agentdesk $VERSION -> ${ref:-latest release}; rerun init with $SETTINGS_FILE"
+    info "dry-run: agentdesk $VERSION -> ${ref:-latest release}; program files only"
     return
   fi
   [ "$(uname -s)" = Linux ] || missing "run on the target Linux server"

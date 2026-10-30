@@ -702,7 +702,7 @@ class UpdateTests(unittest.TestCase):
     def test_new_version_is_downloaded_by_installed_installer(self):
         result = self.shell("update_to_ref v9.9.9 0")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.calls.read_text().splitlines(), ["--remote", "--ref", "v9.9.9"])
+        self.assertEqual(self.calls.read_text().splitlines(), ["--remote", "--update-only", "--ref", "v9.9.9"])
         self.assertIn("-> 9.9.9", result.stderr)
 
     def test_same_version_is_up_to_date_unless_ref_is_explicit(self):
@@ -712,12 +712,13 @@ class UpdateTests(unittest.TestCase):
         self.assertFalse(self.calls.exists())
         result = self.shell("VERSION=9.9.9; update_to_ref main 1")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.calls.read_text().splitlines(), ["--remote", "--ref", "main"])
+        self.assertEqual(self.calls.read_text().splitlines(), ["--remote", "--update-only", "--ref", "main"])
 
-    def test_update_requires_saved_settings(self):
-        result = self.shell("self_update", settings=self.base / "absent.yaml")
-        self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn("rerun install.sh", result.stderr)
+    def test_update_does_not_require_or_apply_saved_settings(self):
+        result = self.shell("self_update --dry-run", settings=self.base / "absent.yaml")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("program files only", result.stderr)
+        self.assertNotIn("rerun init", result.stderr)
         self.assertFalse(self.url.exists())
 
     def test_update_dry_run_downloads_nothing(self):
@@ -725,6 +726,52 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("-> latest release", result.stderr)
         self.assertFalse(self.url.exists())
+
+    def test_program_update_preserves_all_system_configuration(self):
+        # 真实复制程序到临时根；只替换开发机的 root 所有者检查。
+        root = self.base / "target"
+        for path in ["etc/mise/config.toml", "etc/mise/config.local.toml", "etc/mise/mise.lock",
+                     "etc/agentdesk/agentdesk.yaml", "etc/ssh/sshd_config", "etc/xrdp/xrdp.ini",
+                     "etc/xdg/agentdesk/settings", "etc/shadow"]:
+            file = root / path
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text("preserve " + path)
+        before = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+        script = ('source "$1"; SETTINGS_FILE="$2/etc/agentdesk/agentdesk.yaml"; '
+                  'stat() { case "$1 $2" in "-c %u") echo 0 ;; "-c %a") echo 755 ;; '
+                  '*) command stat "$@" ;; esac; }; install_program 1 "$2"')
+        result = subprocess.run(["bash", "-c", script, "_", str(ROOT / "agentdesk.sh"), str(root)],
+                                text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for path, contents in before.items():
+            self.assertEqual((root / path).read_bytes(), contents, path)
+        self.assertEqual((root / "usr/local/lib/agentdesk/agentdesk.sh").read_bytes(),
+                         (ROOT / "agentdesk.sh").read_bytes())
+        self.assertEqual((root / "usr/local/lib/agentdesk/mise.toml").read_bytes(),
+                         (ROOT / "mise.toml").read_bytes())
+
+    def test_program_update_dry_run_does_not_apply_software_list(self):
+        result = self.shell("DRY_RUN=1; install_program 1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("/etc/mise", result.stderr)
+
+    def test_program_update_rejects_unsafe_resource_ancestor(self):
+        root = self.base / "target"
+        destination = root / "usr/local/lib/agentdesk"
+        destination.mkdir(parents=True)
+        outside = self.base / "outside"
+        sentinel = outside / "profile.d/agentdesk.sh"
+        sentinel.parent.mkdir(parents=True)
+        sentinel.write_text("preserve active host configuration\n")
+        (destination / "resources").symlink_to(outside, target_is_directory=True)
+        result = subprocess.run(
+            ["bash", "-c", 'source "$1"; stat() { case "$1 $2" in "-c %u") echo 0 ;; '
+             '"-c %a") echo 755 ;; *) command stat "$@" ;; esac; }; install_program 1 "$2"',
+             "_", str(ROOT / "agentdesk.sh"), str(root)], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("symlinked installation directory", result.stderr)
+        self.assertEqual(sentinel.read_text(), "preserve active host configuration\n")
+        self.assertFalse((destination / "agentdesk.sh").exists())
 
     def test_update_accepts_proxy(self):
         result = self.shell("self_update --proxy http://proxy.example:3128 --dry-run")
@@ -767,6 +814,31 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.log.read_text().splitlines(), ["agentdesk-main", "init", "--user", "desk"])
         self.assertFalse(self.url.exists())
+
+    def test_update_only_downloads_and_copies_without_initializing(self):
+        (self.source / "agentdesk.sh").write_text(
+            '#!/bin/bash\ninstall_program() { printf "%s\\n" "copy" "$@" > "$CALL_LOG"; }\n'
+            'install_program_only() { install_program 1; }\n'
+            'if [ "${BASH_SOURCE[0]}" = "$0" ]; then echo "unexpected init" >&2; exit 89; fi\n')
+        subprocess.run(["tar", "-czf", self.env["ARCHIVE"], "-C", str(self.base), "agentdesk-main"], check=True)
+        result = subprocess.run(["bash", str(self.source / "install.sh"), "--remote", "--update-only",
+                                 "--ref", "main"], env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.log.read_text().splitlines(), ["copy", "1"])
+
+    def test_update_only_refuses_legacy_program_before_executing_it(self):
+        result = subprocess.run(["bash", str(self.source / "install.sh"), "--remote", "--update-only",
+                                 "--ref", "v1.2.3"], env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("does not support --update-only", result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_update_only_rejects_init_options_before_downloading(self):
+        result = subprocess.run(["bash", str(self.source / "install.sh"), "--remote", "--update-only",
+                                 "--user", "desk"], env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertFalse(self.url.exists())
+        self.assertFalse(self.log.exists())
 
     def test_piped_install_downloads_ref_and_passes_options(self):
         with open(ROOT / "install.sh") as script:

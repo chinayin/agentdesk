@@ -12,7 +12,7 @@ AgentDesk 是一个 Bash CLI，把 Ubuntu/Debian 云主机初始化为 XFCE/xrdp
 
 | 文件 | 作用 |
 |---|---|
-| `install.sh` | 安装入口。管道运行时下载最新发布标签（或 `--ref`）的 GitHub 源码包；在源码目录内直接用本地文件（`--remote` 强制下载，供 `agentdesk update` 使用）。最后执行 `agentdesk.sh init` |
+| `install.sh` | 安装入口。管道运行时下载最新发布标签（或 `--ref`）的 GitHub 源码包；在源码目录内直接用本地文件（`--remote` 强制下载）。默认执行 `init`；`--update-only` 只复制程序 |
 | `agentdesk.sh` | 全部逻辑：`init`、`verify`、`info`、`rdp`、`desktop-reset`、`update`，以及分派给原生 mise 的 `install`、`upgrade`、`run` |
 | `resources/` | 安装到主机的配置：`xdg/`（XFCE、Fcitx5 默认值）、`Xsession.d/`（图形会话环境）、`profile.d/`（登录环境） |
 | `mise.toml` | AgentDesk 维护的全机软件清单，init 时覆盖为 `/etc/mise/config.toml` |
@@ -67,7 +67,7 @@ AgentDesk 不在用户家目录保存自己的文件；所有改动直接写入�
 
 ## 4. 软件
 
-| 层 | 文件 | 谁维护 | `agentdesk update` 时 |
+| 层 | 文件 | 谁维护 | `agentdesk init` 时 |
 |---|---|---|---|
 | 通用 | `/etc/mise/config.toml` | AgentDesk（仓库里的 `mise.toml`） | 直接覆盖 |
 | 本机 | `/etc/mise/config.local.toml` | 本机管理员 | 不动 |
@@ -124,11 +124,12 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 
 | Homebrew | AgentDesk | 作用 |
 |---|---|---|
-| `brew update` | `agentdesk update [--ref REF]` | 更新 AgentDesk：默认跟随最新发布标签，版本相同时提示已是最新（显式 `--ref` 总是重装）；由已安装的 `install.sh --remote` 下载，再按 `agentdesk.yaml` 重跑 init，只补装新增软件 |
+| `brew update` | `agentdesk update [--ref REF]` | 只更新 AgentDesk 程序与随附资源：由 `install.sh --remote --update-only` 下载并复制，不执行 init、install 或 upgrade；显式 `--ref` 总是更新 |
 | `brew upgrade` | `agentdesk upgrade [--system]` | 在声明的版本范围内升级软件 |
 | `brew install` | `agentdesk install [--system] [NAME...]` | 记录并安装软件，或补齐清单 |
 
-- **设置文件** `agentdesk.yaml` 记录用户、主题、语言和 RDP 模式与端口；优先级为命令行 > 设置文件 > 默认值，不使用额外的环境变量。没有设置文件时 `update` 拒绝执行，避免用默认值把 `tunnel` 改回直连。选 YAML 是因为团队 Go 配置规范（gox/config）读取 `<app>.yaml`；Bash 侧由 `settings_read` 用 awk 只解析两层 `key: value`。
+- `update` 不读写主机设置；需要应用新配置时显式运行 `init`。旧版更新命令需用新版 `install.sh --update-only` 迁移；目标源码没有独立更新入口时，在加载前拒绝。
+- **设置文件** `agentdesk.yaml` 记录用户、主题、语言和 RDP 模式与端口；优先级为命令行 > 设置文件 > 默认值，不使用额外的环境变量。选 YAML 是因为团队 Go 配置规范（gox/config）读取 `<app>.yaml`；Bash 侧由 `settings_read` 用 awk 只解析两层 `key: value`。
 
 ## 9. 不做的事
 

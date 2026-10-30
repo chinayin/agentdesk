@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 | `--locale zh_CN.UTF-8` | `en_US.UTF-8` | 桌面语言 |
 | `--proxy URL` | | 本次运行使用的 HTTP(S) 代理，见下文 |
 
-参数会被保存，重跑安装命令或 `agentdesk update` 时沿用。全部参数见[使用指南](docs/USER_GUIDE.md)。
+参数会被保存，重跑安装命令或 `agentdesk init` 时沿用。全部参数见[使用指南](docs/USER_GUIDE.md)。
 
 服务器需要代理才能访问 GitHub 时，`curl` 和安装器两处都要带上（`sudo` 会清空已 export 的代理变量）：
 
@@ -75,17 +75,18 @@ agentdesk upgrade                    # 升级个人软件
 agentdesk upgrade --system           # 升级全机共享的工具和应用（管理员）
 agentdesk run TASK                   # 运行个人 mise 配置中的任务
 agentdesk desktop-reset --force      # 把桌面恢复为默认设置
-agentdesk update                     # 把 AgentDesk 自己更新到最新发布版本
+agentdesk update                     # 只更新 AgentDesk 程序
+sudo agentdesk init                  # 应用主机配置、补装缺失软件
 agentdesk --help
 ```
 
-`update` 和 `upgrade` 参照 Homebrew：`update` 更新 AgentDesk 自己和它维护的配置，`upgrade` 升级已安装的软件。
+`update` 更新 AgentDesk 程序，`init` 应用主机配置，`upgrade` 升级已安装的软件。
 
 软件清单都是原生 mise 配置，由 mise 自己合并：
 
 | 文件 | 谁维护 |
 |---|---|
-| `/etc/mise/config.toml` | AgentDesk，`agentdesk update` 时覆盖 |
+| `/etc/mise/config.toml` | AgentDesk，`agentdesk init` 时覆盖 |
 | `/etc/mise/config.local.toml` | 本机管理员（`agentdesk install --system NAME`） |
 | `~/.config/mise/config.toml` | 每个用户（`agentdesk install NAME`） |
 
