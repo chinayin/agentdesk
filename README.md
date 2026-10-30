@@ -9,7 +9,7 @@ Turn a fresh Ubuntu/Debian cloud server into a ready-to-use remote desktop for A
 - **Remote desktop**: XFCE + xrdp, connect with any RDP client, directly or through an SSH tunnel.
 - **Chinese ready**: CJK fonts and Fcitx5 Pinyin input, English or Chinese desktop locale.
 - **AI coding CLIs**: Claude Code, Codex and pi, ready in every terminal.
-- **Dev tools**: Node 26, Python 3.14, Go, pnpm, uv, ripgrep, fd, jq, shellcheck, direnv, tmux and more, managed by [mise](https://mise.jdx.dev/).
+- **Dev tools**: Node, Python, Go, pnpm, uv, ripgrep, fd, jq, shellcheck, direnv, tmux and more, managed by [mise](https://mise.jdx.dev/).
 - **Cloud and Git CLIs**: AWS CLI, Aliyun CLI, cloudflared, GitHub CLI (`gh`) and GitLab CLI (`glab`).
 - **Desktop apps**: Google Chrome and VS Code from their official APT repositories.
 - **Your own software**: `agentdesk install kubectl` / `apt:htop`, recorded in your personal mise config and upgraded with one command.
@@ -19,7 +19,7 @@ Turn a fresh Ubuntu/Debian cloud server into a ready-to-use remote desktop for A
 
 Ubuntu 22.04 / 24.04 / 26.04 or Debian 12 / 13, amd64 or arm64, systemd, root or a sudo user.
 
-For new servers use **Ubuntu 26.04 or Debian 13** (XFCE 4.20, xrdp 0.10). Ubuntu 22.04 works but ships XFCE 4.16 and xrdp 0.9.17; use the SSH tunnel there. See [choosing a system](docs/USER_GUIDE.md).
+For new servers use **Ubuntu 26.04 or Debian 13**. Use an SSH tunnel on Ubuntu 22.04. See [choosing a system](docs/USER_GUIDE.md).
 
 ## Install
 
@@ -29,7 +29,7 @@ Run on the server:
 curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash
 ```
 
-This installs the latest release for the user running the command (`desk` when run as plain root). If the installer did not ask for a desktop password, set one with `sudo passwd $USER`.
+This installs the latest release with `agentdesk` as the default desktop account. After installation, run `sudo passwd USER` for the desktop account shown in the output.
 
 Options go after `bash -s --`:
 
@@ -39,7 +39,7 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 
 | Option | Default | Description |
 |---|---|---|
-| `--user NAME` | the user running the command | Desktop account; created if missing |
+| `--user NAME` | `agentdesk` | Desktop account; created if missing |
 | `--rdp-mode tunnel` | `direct` | Listen on 127.0.0.1 only, reach it through an SSH tunnel |
 | `--locale zh_CN.UTF-8` | `en_US.UTF-8` | Desktop language |
 | `--proxy URL` | | HTTP(S) proxy for this run only, see below |
@@ -57,7 +57,7 @@ curl -x "$PROXY" -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main
 
 The installer ends by printing the connection steps for your server, and `agentdesk info` shows them again. On AWS and Alibaba Cloud the public address is filled in.
 
-- **Direct (default)**: RDP to `SERVER:3389`, session `Xorg`. Allow only your IP in the security group or firewall first: cloud default users usually have passwordless sudo.
+- **Direct (default)**: RDP to `SERVER:3389`, session `Xorg`. Allow only your IP in the security group or firewall first.
 - **SSH tunnel** (required with `--rdp-mode tunnel`): `ssh -N -L 13389:127.0.0.1:3389 USER@SERVER`, then RDP to `127.0.0.1:13389`.
 - **One command on a Mac** (Windows App): `ssh USER@SERVER agentdesk rdp > agentdesk.rdp && open agentdesk.rdp`
 

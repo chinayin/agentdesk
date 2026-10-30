@@ -1,16 +1,8 @@
-# AgentDesk 维护的全机软件清单，随版本发布：init 与 agentdesk update 把它复制为
-# /etc/mise/config.toml 并覆盖，请勿在主机上直接修改。
-# 本机增补写 /etc/mise/config.local.toml（agentdesk install --system NAME），mise 原生合并且优先；
-# 个人软件写 ~/.config/mise/config.toml（agentdesk install NAME）。
 # mise configuration: https://mise.jdx.dev/configuration.html
 
 [settings]
 lockfile = true
-# 锁在目标主机生成，不随程序发行。版本经 mise 的版本服务解析，不消耗 GitHub API
-# 的匿名限额（每个 IP 每小时 60 次）；关掉它时新主机首次安装会因限额失败。
 use_versions_host = true
-# 安装只合并本次涉及的条目、只锁本机平台。mise 2026.10.19 起默认的 generate 会重建
-# 所有可见的锁并锁定其他平台，普通用户安装个人软件时会去写无权写入的系统锁。
 lockfile_mode = "merge"
 task.run_auto_install = false
 
@@ -21,18 +13,18 @@ task.run_auto_install = false
 "core:go" = "latest"
 "aqua:pnpm/pnpm" = "latest"
 "aqua:astral-sh/uv" = "latest"
-# AI 编程 CLI：claude、codex、pi
+# AI 编程 CLI
 "aqua:anthropics/claude-code" = "latest"
 "aqua:openai/codex" = "latest"
 "aqua:earendil-works/pi" = "latest"
-# 代码托管 CLI：gh、glab
+# 代码托管 CLI
 "aqua:cli/cli" = "latest"
 "gitlab:gitlab-org/cli" = "latest"
-# 云厂商 CLI：aws、aliyun、cloudflared；凭据由各用户自己配置
+# 云工具
 "aqua:aws/aws-cli" = "latest"
 "github:aliyun/aliyun-cli" = "latest"
 "aqua:cloudflare/cloudflared" = "latest"
-# 通用工具：rg、fd、jq、shellcheck、yamlfmt、bats、direnv、betterleaks（密钥扫描）
+# 通用工具
 "aqua:BurntSushi/ripgrep" = "latest"
 "aqua:sharkdp/fd" = "latest"
 "aqua:jqlang/jq" = "latest"
@@ -45,8 +37,7 @@ task.run_auto_install = false
 [env]
 DISABLE_AUTOUPDATER = "1"
 
-# 系统应用直接声明厂商源和包名；mise 调用 apt，全机共享程序。
-# suites 使用厂商 stable，不跟随 Ubuntu/Debian 的发行版代号。
+# 系统应用
 [bootstrap.apt.sources.google-chrome]
 uris = "https://dl.google.com/linux/chrome/deb/"
 suites = "stable"

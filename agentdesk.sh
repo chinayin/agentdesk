@@ -2,7 +2,7 @@
 # AgentDesk CLI：主机初始化、检查、桌面重置与软件命令；不执行用户的 mise task。
 set -euo pipefail
 
-VERSION="0.3.0"
+VERSION="0.3.1-dev"
 # 解析全局入口的软链，资源相对于真实程序目录。
 agentdesk_source="${BASH_SOURCE[0]}"
 while [ -L "$agentdesk_source" ]; do
@@ -69,7 +69,7 @@ Commands:
   update             Update AgentDesk itself
 
 Init options (saved to /etc/agentdesk/agentdesk.yaml and reused later):
-  --user NAME        Desktop user (default: the user running sudo)
+  --user NAME        Desktop user (default: agentdesk; saved settings take precedence)
   --theme NAME       whitesur | none (default: whitesur)
   --rdp-mode MODE    direct | tunnel (default: direct)
   --rdp-port PORT    RDP port (default: 3389)
@@ -90,14 +90,6 @@ Examples:
 
 Docs: https://github.com/chinayin/agentdesk
 EOF
-}
-
-# 默认桌面账户是执行安装的人；直接以 root 运行时为 desk。
-default_desktop_user() {
-  local name
-  if [ "$(id -u)" -eq 0 ]; then name="${SUDO_USER:-}"; else name="$(id -un)"; fi
-  [ -n "$name" ] && [ "$name" != root ] || name=desk
-  printf '%s\n' "$name"
 }
 
 # 读取 init 写入的两层 YAML 子集，输出 key=value（嵌套键如 rdp.mode）。
@@ -163,7 +155,7 @@ parse_args() {
       esac
     done < <(settings_read "$SETTINGS_FILE")
   fi
-  DESKTOP_USER="${saved_user:-$(default_desktop_user)}"
+  DESKTOP_USER="${saved_user:-agentdesk}"
   FORCE=0
   DRY_RUN=0
   while [ "$#" -gt 0 ]; do
@@ -376,14 +368,9 @@ configure_account() {
     run usermod -aG sudo "$DESKTOP_USER"
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "dry-run: preserve existing password; prompt only if missing"
+    info "dry-run: preserve desktop password"
   elif [ "$(passwd -S "$DESKTOP_USER" | awk '{print $2}')" != P ]; then
-    if [ -t 0 ]; then
-      info "Set the desktop login password (input is hidden)"
-      passwd "$DESKTOP_USER"
-    else
-      warn "RDP login is not ready: run sudo passwd $DESKTOP_USER before connecting"
-    fi
+    warn "RDP login is not ready: run sudo passwd $DESKTOP_USER before connecting"
   fi
 }
 

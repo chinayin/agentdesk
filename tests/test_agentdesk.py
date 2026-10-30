@@ -8,6 +8,7 @@ import json
 import re
 import xml.dom.minidom
 import shutil
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 # 函数级测试在加载脚本后把设置文件指向不存在的路径，不读取开发机上的 /etc/agentdesk。
@@ -120,24 +121,24 @@ class HostTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "3390")
 
-    def test_default_desktop_user_is_the_invoking_user(self):
+    def test_default_desktop_user_is_independent_of_invoking_user(self):
         with tempfile.TemporaryDirectory() as tmp:
             stub = Path(tmp) / "id"
-            for uid, name, sudo_user, expected in [
-                ("0", "root", "ubuntu", "ubuntu"),   # sudo 运行：取 SUDO_USER
-                ("0", "root", "", "desk"),           # 直接以 root 运行：新建 desk
-                ("0", "root", "root", "desk"),
-                ("1000", "admin", "", "admin"),      # 普通用户运行：取自己
+            for uid, name, sudo_user in [
+                ("0", "root", "ubuntu"),
+                ("0", "root", ""),
+                ("0", "root", "root"),
+                ("1000", "admin", ""),
             ]:
                 stub.write_text(f'#!/bin/sh\n[ "$1" = -u ] && echo {uid} || echo {name}\n')
                 stub.chmod(0o755)
                 env = {k: v for k, v in os.environ.items() if k != "SUDO_USER"}
                 env.update(PATH=f"{tmp}:{os.environ['PATH']}", SUDO_USER=sudo_user)
                 result = subprocess.run(
-                    ["bash", "-c", 'source "$1"; ' + NO_SETTINGS + 'parse_args verify; printf "%s" "$DESKTOP_USER"',
+                    ["bash", "-c", 'source "$1"; ' + NO_SETTINGS + 'parse_args init; printf "%s" "$DESKTOP_USER"',
                      "_", str(ROOT / "agentdesk.sh")], env=env, text=True, capture_output=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, expected, (uid, sudo_user))
+                self.assertEqual(result.stdout, "agentdesk", (uid, sudo_user))
 
     def test_supported_system_matrix_and_architecture(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -244,6 +245,29 @@ class HostTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("password reset", result.stderr)
+
+    def test_missing_password_is_set_manually_even_with_a_terminal(self):
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        for state in ["L", "NP"]:
+            for terminal in [False, True]:
+                with self.subTest(state=state, terminal=terminal):
+                    script = (
+                        'source "$1"; ' + NO_SETTINGS +
+                        'parse_args init --user desk; getent() { return 0; }; '
+                        'passwd() { if [ "$1" = -S ]; then '
+                        f'printf "desk {state} 2026-10-28 0 99999 7 -1\\n"; '
+                        'else echo "unexpected password change" >&2; return 89; fi; }; '
+                        'configure_account'
+                    )
+                    result = subprocess.run(
+                        ["bash", "-c", script, "_", str(ROOT / "agentdesk.sh")],
+                        stdin=slave if terminal else subprocess.DEVNULL,
+                        text=True, capture_output=True, timeout=5,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn("sudo passwd desk", result.stderr)
 
     def test_proxy_whitelist_passes_only_set_values_in_lowercase(self):
         result = subprocess.run(
@@ -476,6 +500,15 @@ class SettingsTests(unittest.TestCase):
         result = self.shell("parse_args verify; " + self.PRINT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "alice none zh_CN.UTF-8 tunnel 3390")
+
+    def test_default_user_is_saved_and_can_be_overridden(self):
+        for options, expected in [("", "agentdesk"), ("--user ubuntu", "ubuntu"), ("", "ubuntu")]:
+            with self.subTest(options=options, expected=expected):
+                result = self.shell(f'parse_args init {options}; write_settings "$SETTINGS_FILE"')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                result = self.shell('parse_args verify; printf "%s" "$DESKTOP_USER"')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected)
 
     def test_cli_overrides_file_and_environment_is_not_read(self):
         self.file.parent.mkdir(parents=True)
@@ -715,6 +748,29 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.url.read_text().strip(),
                          "https://github.com/chinayin/agentdesk/archive/v1.2.3.tar.gz")
+
+    def test_piped_install_does_not_take_over_the_controlling_terminal(self):
+        (self.source / "agentdesk.sh").write_text(
+            '#!/bin/sh\nif [ -t 0 ]; then echo "unexpected terminal input" >&2; exit 89; fi\n'
+            'printf "%s\\n" "$@" > "$CALL_LOG"\n')
+        subprocess.run(["tar", "-czf", self.env["ARCHIVE"], "-C", str(self.base),
+                        "agentdesk-main"], check=True)
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        # 保留真实控制终端，但安装脚本通过管道式 stdin 读取。
+        launcher = (
+            'import fcntl, os, sys, termios; os.setsid(); '
+            'fcntl.ioctl(int(sys.argv[1]), termios.TIOCSCTTY, 0); '
+            'os.execvp("bash", ["bash", "-s"])'
+        )
+        with open(ROOT / "install.sh") as script:
+            result = subprocess.run(
+                [sys.executable, "-c", launcher, str(slave)], pass_fds=(slave,),
+                stdin=script, env=self.env, text=True, capture_output=True, timeout=10,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.log.read_text().splitlines(), ["init"])
 
     def test_piped_install_without_release_suggests_main(self):
         env = {**self.env, "RELEASE_URL": "https://github.com/chinayin/agentdesk/releases"}

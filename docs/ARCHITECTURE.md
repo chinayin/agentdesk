@@ -31,7 +31,7 @@ flowchart TD
     C --> P["参数：命令行 > /etc/agentdesk/agentdesk.yaml > 默认值；检查系统，非 root 时经 sudo 重新执行"]
     P --> M["首次安装临时 mask xrdp，监听配置写好前不对外开放"]
     M --> K["apt 安装基础包、XFCE、xrdp、字体、输入法（不做全机升级）；生成 en_US、zh_CN locale"]
-    K --> U["创建或复用桌面账户；仅在交互终端且没有密码时提示设置"]
+    K --> U["创建或复用桌面账户；密码由用户手动设置"]
     U --> Z["extrepo 启用 mise 官方 apt 源，安装或升级 mise"]
     Z --> R["写 xrdp.ini 监听地址与端口"]
     R --> I["复制程序到 /usr/local/lib/agentdesk；覆盖 /etc/mise/config.toml"]
@@ -111,7 +111,7 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 - 代理只透传已设置的 `http_proxy`、`https_proxy`、`all_proxy`、`no_proxy`。`--proxy URL` 只在本次运行导出这些变量，不保存（地址可能含密码，而设置文件所有人可读）；只接受 `http(s)://`（apt 不支持 SOCKS）。
 - 不提供下载镜像：网络不通时用 `--proxy`，它一次覆盖全部下载；镜像只能覆盖 AgentDesk 自己的文件。
 - `agentdesk.yaml` 由 root 写入，0644，不含凭据，按行解析，不当作脚本执行。
-- 默认桌面账户是执行安装的人（`SUDO_USER`；直接以 root 运行时新建 `desk`）。云镜像默认用户常有免密 sudo，所以直连 RDP 必须限制来源 IP。新账户加入 sudo 组（需要密码）。
+- 默认桌面账户为 `agentdesk`，已有设置优先，`--user` 可覆盖。新账户加入 sudo 组（需要密码），直连 RDP 须限制来源 IP。
 - 拒绝符号链接形式、非 root 所有或组/其他可写的安装目录和系统配置；`/usr/local/bin/agentdesk` 不是受管软链时拒绝覆盖。
 - 不自动生成密码，不修改 SSH 认证、防火墙或云安全组，不自动重启运行中的 xrdp。
 

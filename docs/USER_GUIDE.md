@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `--ref REF` | 最新发布标签 | 下载的分支或标签，如 `--ref main`；只对 install.sh 和 `agentdesk update` 生效 |
-| `--user NAME` | 执行命令的用户 | 直接以 root 运行时为 `desk`；不能是 root，UID ≥ 1000；不存在时创建并加入 sudo 组 |
+| `--user NAME` | `agentdesk` | 不能是 root，UID ≥ 1000；不存在时创建并加入 sudo 组 |
 | `--theme whitesur\|none` | `whitesur` | `none` 用 Greybird/Adwaita |
 | `--rdp-mode direct\|tunnel` | `direct` | `tunnel` 只监听 127.0.0.1 |
 | `--rdp-port PORT` | `3389` | |
@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 init 把参数保存到 `/etc/agentdesk/agentdesk.yaml`，之后的命令都以它为默认值，重跑时不必再传。优先级：命令行 > 设置文件 > 默认值。
 
 ```yaml
-user: ubuntu
+user: agentdesk
 theme: whitesur
 locale: en_US.UTF-8
 rdp:
@@ -68,8 +68,8 @@ agentdesk upgrade --system --proxy http://127.0.0.1:7890
 
 ## 2. 密码与登录
 
-- 默认把执行安装的用户作为桌面账户，SSH 和 RDP 共用家目录。云镜像默认用户（如 `ubuntu`）通常有免密 sudo，RDP 密码泄露就等于 root 泄露：直连务必限制来源 IP，或用 `--rdp-mode tunnel`；想分开时用 `--user NAME` 建新账户（sudo 需要密码）。
-- 安装器只在交互终端且账户没有密码时提示设置；否则装完执行 `sudo passwd USER`。不自动生成密码，不修改 SSH 认证。
+- 桌面账户默认 `agentdesk`，可用 `--user NAME` 指定；SSH 仍使用原账户。
+- 安装器保留已有密码；没有密码时，安装后手动执行 `sudo passwd USER`。不修改 SSH 认证。
 - 装完重新登录 SSH 或 RDP；当前终端要立即生效可执行 `. /etc/profile.d/agentdesk.sh`。
 
 ## 3. 连接

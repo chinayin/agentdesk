@@ -87,8 +87,6 @@ main() {
   echo "==> Downloading AgentDesk ${REF}" >&2
   fetch "https://github.com/$REPO/archive/$REF.tar.gz" | tar -xzf - -C "$tmp" --strip-components=1
   [ -f "$tmp/agentdesk.sh" ] || die "downloaded AgentDesk ${REF} does not contain agentdesk.sh"
-  # stdin 是脚本本身；有终端时改用 /dev/tty，以便提示设置密码。
-  if [ ! -t 0 ] && { : < /dev/tty; } 2>/dev/null; then exec < /dev/tty; fi
   bash "$tmp/agentdesk.sh" init ${args[@]+"${args[@]}"}
 }
 

@@ -9,7 +9,7 @@
 - **远程桌面**：XFCE + xrdp，任意 RDP 客户端直连，或经 SSH 隧道连接。
 - **中文可用**：中文字体与 Fcitx5 拼音输入法，桌面语言可选英文或中文。
 - **AI 编程命令行**：Claude Code、Codex、pi，在任何终端里直接可用。
-- **开发工具**：Node 26、Python 3.14、Go、pnpm、uv、ripgrep、fd、jq、shellcheck、direnv、tmux 等，由 [mise](https://mise.jdx.dev/) 管理。
+- **开发工具**：Node、Python、Go、pnpm、uv、ripgrep、fd、jq、shellcheck、direnv、tmux 等，由 [mise](https://mise.jdx.dev/) 管理。
 - **云与代码托管 CLI**：AWS CLI、阿里云 CLI、cloudflared、GitHub CLI（`gh`）、GitLab CLI（`glab`）。
 - **桌面应用**：Google Chrome、VS Code，来自各自的官方 APT 源。
 - **自己加软件**：`agentdesk install kubectl` / `apt:htop`，记录在个人 mise 配置中，一条命令升级。
@@ -19,7 +19,7 @@
 
 Ubuntu 22.04 / 24.04 / 26.04 或 Debian 12 / 13，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。
 
-新机器推荐 **Ubuntu 26.04 或 Debian 13**（XFCE 4.20、xrdp 0.10）。Ubuntu 22.04 能用，但自带的是 XFCE 4.16 和 xrdp 0.9.17，建议用 SSH 隧道连接。详见[选择系统](docs/USER_GUIDE.md)。
+新机器推荐 **Ubuntu 26.04 或 Debian 13**。Ubuntu 22.04 建议用 SSH 隧道连接。详见[选择系统](docs/USER_GUIDE.md)。
 
 ## 安装
 
@@ -29,7 +29,7 @@ Ubuntu 22.04 / 24.04 / 26.04 或 Debian 12 / 13，amd64 或 arm64，systemd，�
 curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash
 ```
 
-安装最新发布版本，桌面账户就是执行命令的用户（直接以 root 运行时新建 `desk`）。安装过程没有提示设置密码时，执行 `sudo passwd $USER`。
+安装最新发布版本，默认桌面账户为 `agentdesk`。安装后按输出提示执行 `sudo passwd 用户名` 设置桌面密码。
 
 参数写在 `bash -s --` 之后：
 
@@ -39,7 +39,7 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
-| `--user NAME` | 执行命令的用户 | 桌面账户，不存在时创建 |
+| `--user NAME` | `agentdesk` | 桌面账户，不存在时创建 |
 | `--rdp-mode tunnel` | `direct` | 只监听 127.0.0.1，经 SSH 隧道连接 |
 | `--locale zh_CN.UTF-8` | `en_US.UTF-8` | 桌面语言 |
 | `--proxy URL` | | 本次运行使用的 HTTP(S) 代理，见下文 |
@@ -57,7 +57,7 @@ curl -x "$PROXY" -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main
 
 安装结束时会按这台服务器的实际设置打印连接步骤，之后运行 `agentdesk info` 可以再次查看；在 AWS 和阿里云上会自动填好公网地址。
 
-- **直连（默认）**：RDP 连接 `服务器:3389`，会话选 `Xorg`。先在安全组或防火墙中只放行你的 IP：云镜像的默认用户通常可以免密 sudo。
+- **直连（默认）**：RDP 连接 `服务器:3389`，会话选 `Xorg`。先在安全组或防火墙中只放行你的 IP。
 - **SSH 隧道**（`--rdp-mode tunnel` 时必须用）：`ssh -N -L 13389:127.0.0.1:3389 用户@服务器`，再用 RDP 连接 `127.0.0.1:13389`。
 - **Mac 一条命令打开**（Windows App）：`ssh 用户@服务器 agentdesk rdp > agentdesk.rdp && open agentdesk.rdp`
 
