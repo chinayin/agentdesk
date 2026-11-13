@@ -288,13 +288,14 @@ as_user() {
     ${PROXY_ENV[@]+"${PROXY_ENV[@]}"} TERM=xterm LANG="$LOCALE_NAME" "$@"
 }
 
+# 允许 32 位色深，否则 xrdp 无法协商 GFX 图形通道。
 render_xrdp() {
   local input="$1" output="$2" mode="$3" port="$4" address="0.0.0.0"
   [ "$mode" != tunnel ] || address="127.0.0.1"
   awk -v listener="tcp://$address:$port" '
     function defaults() {
       if (inside && !seen_port) print "port=" listener
-      if (inside && !seen_bpp) print "max_bpp=24"
+      if (inside && !seen_bpp) print "max_bpp=32"
     }
     /^[[:space:]]*\[/ {
       defaults()
@@ -306,7 +307,7 @@ render_xrdp() {
       seen_port=1; next
     }
     inside && /^[[:space:]]*max_bpp[[:space:]]*=/ {
-      if (!seen_bpp) print "max_bpp=24"
+      if (!seen_bpp) print "max_bpp=32"
       seen_bpp=1; next
     }
     { print }

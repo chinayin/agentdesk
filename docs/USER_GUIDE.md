@@ -81,6 +81,7 @@ agentdesk upgrade --system --proxy http://127.0.0.1:7890
 - **SSH 终端**：`ssh agentdesk@服务器`（或 `--user` 指定的账户）；TCP 22 只放行你的 IP。
 - **SSH 隧道**：`ssh -N -L 13389:127.0.0.1:3389 用户@服务器`，RDP 连 `127.0.0.1:13389`。
 - 修改 RDP 配置不会断开现有会话；退出桌面后执行 `sudo systemctl restart xrdp` 生效。
+- **画面传输**：AgentDesk 设置 `[Globals]` 下的 `max_bpp=32`，避免 24 位限制阻止 GFX。GFX 需要 xrdp 0.10+ 和客户端支持（见 [官方说明](https://github.com/neutrinolabs/xrdp/wiki/NEWS-v0.10)）；重连后检查 `/var/log/xrdp.log` 的协商结果，设置 32 位不代表已启用 GFX 或 H.264。已有服务器可手动修改 `/etc/xrdp/xrdp.ini`，按上一条重启生效。链路慢时，用相同分辨率和操作场景对比原网络与手机热点。
 - **输入**：XFCE 终端复制粘贴用 `Ctrl+Shift+C/V`。Mac 上的 Windows App 可以把键盘模式切换为 Scancode 或 Unicode，符号输入丢失 Shift 时改用 Unicode（见 [Microsoft 文档](https://learn.microsoft.com/en-us/windows-app/input-keyboard-mouse-touch-pen?tabs=macos)）。中文用 Fcitx5 拼音，从顶栏输入法菜单切换。
 
 ## 4. 桌面维护
@@ -98,6 +99,14 @@ agentdesk desktop-reset --force    # 先退出该用户的全部图形会话
 - `desktop-reset --force` 删除面板、外观、窗口管理器、背景、终端这几项个人设置（不备份），其他设置保留；XFCE 配置由 dotfiles 软链管理时拒绝执行。
 - 时区：AgentDesk 不修改系统时区，云镜像默认是 UTC。需要本地时间时执行 `sudo timedatectl set-timezone Asia/Shanghai`，重新登录后生效。
 - XFCE 终端以登录 shell 启动，会加载 mise 工具路径、`mise activate` 和 direnv hook；`ssh 主机 命令` 这类非登录 shell 不加载，需要时写成 `bash -lc '命令'`。
+
+默认 Dock 位于左侧居中，从上到下是 Chrome、VS Code、终端、文件管理器、应用查找器和运行中的窗口。已有桌面可直接调整，无需重置个人设置：
+
+1. 右键 Dock → **面板 → 面板首选项**，选择 **面板 2**。
+2. 在“显示”中把模式改为 **垂直**，取消“锁定面板”，拖动面板端部的把手到屏幕左侧居中，再锁定。
+3. 在“项目”中添加两个 **启动器**，分别打开其属性，选择 **Google Chrome** 和 **Visual Studio Code**；用上下箭头调整排列。
+
+界面选项详见 [XFCE 面板设置](https://docs.xfce.org/xfce/xfce4-panel/preferences)和[启动器](https://docs.xfce.org/xfce/xfce4-panel/launcher)。
 
 ## 5. 软件管理
 

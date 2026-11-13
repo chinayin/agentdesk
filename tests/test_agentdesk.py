@@ -199,8 +199,19 @@ class HostTests(unittest.TestCase):
                 rendered = dest.read_text()
                 self.assertIn(f"port={expected}\n", rendered)
                 self.assertIn("[Xorg]\nport=-1\ncode=20\n", rendered)
-                self.assertIn("max_bpp=24\n", rendered)
+                self.assertIn("max_bpp=32\n", rendered)
                 self.assertIn("security_layer=negotiate\n", rendered)
+
+    def test_xrdp_allows_gfx_for_legacy_and_missing_color_depth(self):
+        for settings in ["max_bpp=24\n", ""]:
+            with self.subTest(settings=settings), tempfile.TemporaryDirectory() as tmp:
+                src, dest = Path(tmp) / "in", Path(tmp) / "out"
+                src.write_text("[Globals]\nport=3389\n" + settings)
+                result = self.function('render_xrdp "$1" "$2" direct 3389', src, dest)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                rendered = dest.read_text()
+                self.assertEqual(rendered.count("max_bpp=32\n"), 1)
+                self.assertNotIn("max_bpp=24", rendered)
 
     def test_xrdp_rejects_missing_globals(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -366,7 +377,7 @@ class DesktopTests(unittest.TestCase):
 
     def test_panel_launchers_reference_installed_applications(self):
         panel = (ROOT / "resources/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml").read_text()
-        for app in ["xfce4-terminal", "thunar", "xfce4-appfinder"]:
+        for app in ["google-chrome", "code", "xfce4-terminal", "thunar", "xfce4-appfinder"]:
             self.assertIn(f'value="{app}.desktop"', panel)
         self.assertNotIn("agentdesk.desktop", panel)
 
