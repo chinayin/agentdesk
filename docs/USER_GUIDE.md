@@ -138,7 +138,7 @@ agentdesk update --ref main    # 跟随开发分支，或 --ref vX.Y.Z 指定版
 agentdesk update --dry-run     # 只打印计划
 ```
 
-- `update` 只替换程序和随附资源，不应用主机配置、不安装或升级软件。需要应用新配置时运行 `sudo agentdesk init`；升级软件用 `agentdesk upgrade` 或 `sudo agentdesk upgrade --system`。
+- `update` 只替换程序和随附资源，不应用主机配置、不安装或升级软件。需要应用新配置时运行 `sudo agentdesk init`（也会更新系统 mise）；升级软件用 `agentdesk upgrade` 或 `sudo agentdesk upgrade --system`。
 - 已是最新时只提示；显式 `--ref` 时总是更新。不支持只更新程序的旧目标版本会被拒绝。
 
 旧版 `update` 会重跑 init。首次切换到独立更新，用新版入口：

@@ -394,7 +394,9 @@ ssh_password_enabled() {
   local effective
   effective="$("$SSHD" -T -f "$SSHD_CONFIG" \
     -C "user=${DESKTOP_USER},host=client,addr=192.0.2.2,laddr=192.0.2.1,lport=22")" || return 1
+  # OpenSSH 10.5 起输出混合大小写的关键字；兼容旧版本的小写格式。
   awk '
+    { $1 = tolower($1) }
     $1 == "passwordauthentication" { password = ($2 == "yes") }
     $1 == "permitemptypasswords" { nonempty = ($2 == "no") }
     $1 == "authenticationmethods" {
@@ -1037,7 +1039,7 @@ software_main() (
         export PATH="${paths%:}:$PATH"
       fi
       # 锁设置不依赖系统清单：个人的锁定与 apt 命令会忽略它。
-      if [ "$action" != run ]; then export MISE_LOCKFILE=1 MISE_LOCKFILE_MODE=merge; fi
+      if [ "$action" != run ]; then export MISE_LOCKFILE=1; fi
     fi
   fi
   if [ "$action" = run ]; then

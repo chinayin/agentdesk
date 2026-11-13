@@ -3,7 +3,6 @@
 [settings]
 lockfile = true
 use_versions_host = true
-lockfile_mode = "merge"
 task.run_auto_install = false
 
 [tools]

@@ -25,7 +25,8 @@
 |---|---|
 | `tests/test_agentdesk.py` | 主脚本：参数与帮助、系统与架构判断、桌面默认值与模板、登录环境、desktop-reset、设置文件、`info`/`rdp`、自我更新、install.sh、代理 |
 | `tests/test_software.py` | 软件命令：个人与 `--system` 作用域、忽略系统清单的范围、参数拒绝、退出码透传、代理传递 |
-| `tests/test_mise_integration.py` | 真实 mise：配置写入与隔离、系统目录加载顺序、任务输出；不下载软件。需 `AGENTDESK_TEST_MISE="$(command -v mise)"` |
+| `tests/test_mise_integration.py` | 真实 mise：配置写入与隔离、系统目录加载顺序、个人安装保留只读系统锁、任务输出；只用本地测试文件，不联网。需 `AGENTDESK_TEST_MISE="$(command -v mise)"`，版本基线见[架构说明](ARCHITECTURE.md#4-软件) |
+| `tests/test_ssh.py` | 新旧 sshd 输出格式、真实配置解析、工作账户隔离和失败恢复；不操作主机 SSH 服务 |
 
 编写约定：
 

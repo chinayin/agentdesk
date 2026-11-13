@@ -80,8 +80,8 @@ elif os.getenv('FAIL_LOCKED_INSTALL') and 'install' in sys.argv and '--locked' i
         self.assertIsNone(install['ignored'])
         self.assertTrue(all(c['ignored'] is None for c in calls if 'reshim' in c['args']))
         self.assertTrue(all(c['ignored'] == '/etc/mise' for c in calls if 'bootstrap' in c['args']))
-        # 锁设置对所有会写锁的调用生效（bin-paths 只读路径，发生在设置之前）。
-        self.assertTrue(all(c['lockmode'] == 'merge' for c in calls if 'bin-paths' not in c['args']))
+        # 使用 mise 默认锁模式，不再强制已弃用的 merge。
+        self.assertTrue(all(c['lockmode'] is None for c in calls))
         # 参数形如 -C / SUBCOMMAND ...；只用 lock --bump + install，不调用 mise 的 upgrade/prune。
         self.assertFalse(any(c['args'][2] in ('upgrade', 'prune') for c in calls))
         self.assertFalse(any('files' in c['args'] for c in calls))

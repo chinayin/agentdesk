@@ -1,8 +1,10 @@
 """可选真实 mise 集成：AGENTDESK_TEST_MISE=/path/to/mise bash test.sh。"""
 import os
 from pathlib import Path
+import platform
 import subprocess
 import tempfile
+import tomllib
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,6 +110,47 @@ class NativeMiseTests(unittest.TestCase):
             result = subprocess.run(['bash', str(ROOT / 'agentdesk.sh'), action],
                                     env=self.env, cwd=self.project, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    @unittest.skipIf(os.geteuid() == 0, 'requires a non-root user to enforce read-only permissions')
+    def test_personal_install_preserves_read_only_system_lock(self):
+        # 用本地可执行文件走真实 http 后端，不联网；系统锁不可写。
+        system = self.base / 'system'
+        system.mkdir()
+        artifact = self.base / 'probe'
+        artifact.write_text('#!/bin/sh\necho probe\n')
+        artifact.chmod(0o755)
+        settings = tomllib.loads((ROOT / 'mise.toml').read_text())['settings']
+        mode = settings.get('lockfile_mode', 'generate')
+        (system / 'config.toml').write_text(
+            f'[settings]\nlockfile = true\nlockfile_mode = "{mode}"\n[tools]\n'
+            f'"http:shared" = {{ version = "1.0.0", url = "{artifact.as_uri()}" }}\n')
+        env = {**self.env, 'MISE_SYSTEM_CONFIG_DIR': str(system),
+               'MISE_SYSTEM_DATA_DIR': str(self.base / 'shared'), 'MISE_YES': '1'}
+
+        def run(*args):
+            result = subprocess.run([MISE, '-C', '/', *args], env=env, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        # 系统安装与产品一样只锁本机平台。
+        os_name = 'macos' if platform.system() == 'Darwin' else 'linux'
+        arch = 'arm64' if platform.machine() in ('arm64', 'aarch64') else 'x64'
+        run('lock', '--global', '--platform', f'{os_name}-{arch}')
+        run('install', '--system', '--locked')
+        lock = system / 'mise.lock'
+        # 升级前留下的 v3 锁也必须原样保留，不能由普通用户迁移。
+        lock.write_text(lock.read_text().replace('lockfile_version = 4', 'lockfile_version = 3'))
+        before = lock.read_bytes()
+        lock.chmod(0o444)
+        system.chmod(0o555)
+        try:
+            self.config.write_text('[tools]\n'
+                                   f'"http:personal" = {{ version = "1.0.0", url = "{artifact.as_uri()}" }}\n')
+            run('use', '--global', 'http:personal@1.0.0')
+            run('install')
+            self.assertEqual(lock.read_bytes(), before)
+        finally:
+            system.chmod(0o755)
+            lock.chmod(0o644)
 
 
 if __name__ == '__main__':

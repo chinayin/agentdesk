@@ -10,6 +10,24 @@ ROOT = Path(__file__).resolve().parents[1]
 SSHD = shutil.which("sshd") or "/usr/sbin/sshd"
 
 
+class SshOutputTests(unittest.TestCase):
+    def test_password_check_accepts_both_keyword_formats_and_rejects_blocked_login(self):
+        for keywords in [("passwordauthentication", "permitemptypasswords", "authenticationmethods"),
+                         ("PasswordAuthentication", "PermitEmptyPasswords", "AuthenticationMethods")]:
+            for values, expected in [(("yes", "no", "any"), 0), (("yes", "no", "password"), 0),
+                                     (("no", "no", "any"), 1), (("yes", "yes", "any"), 1),
+                                     (("yes", "no", "publickey,password"), 1), (("yes", "no", ""), 1)]:
+                with self.subTest(keywords=keywords, values=values):
+                    output = "\n".join(f"{key} {value}" for key, value in zip(keywords, values))
+                    result = subprocess.run(
+                        ["bash", "-c", 'source "$1"; DESKTOP_USER=agentdesk; SSHD=sshd_output; '
+                         'sshd_output() { printf "%s\\n" "$SSHD_OUTPUT"; }; ssh_password_enabled',
+                         "_", str(ROOT / "agentdesk.sh")],
+                        env={**os.environ, "SSHD_OUTPUT": output}, text=True, capture_output=True,
+                    )
+                    self.assertEqual(result.returncode, expected, result.stderr)
+
+
 @unittest.skipUnless(Path(SSHD).is_file(), "sshd is required for SSH configuration tests")
 class SshTests(unittest.TestCase):
     def setUp(self):
@@ -55,7 +73,8 @@ class SshTests(unittest.TestCase):
             text=True, capture_output=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        return dict(line.split(" ", 1) for line in result.stdout.splitlines())
+        return {key.lower(): value for key, value in
+                (line.split(" ", 1) for line in result.stdout.splitlines())}
 
     def test_password_login_enabled_only_for_selected_user(self):
         original = self.config.read_bytes()
