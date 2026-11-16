@@ -17,9 +17,9 @@ Turn a fresh Ubuntu/Debian cloud server into a ready-to-use remote desktop for A
 
 ## Requirements
 
-Ubuntu 22.04 / 24.04 / 26.04 or Debian 12 / 13, amd64 or arm64, systemd, root or a sudo user.
+Ubuntu 22.04 / 24.04 / 26.04 / 26.10 or Debian 12 / 13, amd64 or arm64, systemd, root or a sudo user.
 
-For new servers use **Ubuntu 26.04 or Debian 13**. Use an SSH tunnel on Ubuntu 22.04. See [choosing a system](docs/USER_GUIDE.md).
+For new servers use **Ubuntu 26.10**. Use an SSH tunnel on Ubuntu 22.04. See [choosing a system](docs/USER_GUIDE.md) for the support period and [pending acceptance checks](docs/ROADMAP.md).
 
 ## Install
 
@@ -34,14 +34,14 @@ This installs the latest release with `agentdesk` as the default SSH and desktop
 Options go after `bash -s --`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash -s -- --rdp-mode tunnel --locale zh_CN.UTF-8
+curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash -s -- --rdp-mode tunnel
 ```
 
 | Option | Default | Description |
 |---|---|---|
 | `--user NAME` | `agentdesk` | SSH and desktop account; created if missing |
 | `--rdp-mode tunnel` | `direct` | Listen on 127.0.0.1 only, reach it through an SSH tunnel |
-| `--locale zh_CN.UTF-8` | `en_US.UTF-8` | Desktop language |
+| `--locale zh_CN.UTF-8` | System language | Override desktop language |
 | `--proxy URL` | | HTTP(S) proxy for this run only, see below |
 
 Options are saved and reused when you re-run the installer or `agentdesk init`. All options are in the [User Guide](docs/USER_GUIDE.md).
@@ -109,7 +109,7 @@ Documents are written in Chinese.
 ```bash
 sudo bash install.sh  # install from a source checkout
 bash test.sh          # offline tests, about 10 seconds
-bash tests/e2e.sh     # Docker install test (default: Ubuntu 26.04, native architecture)
+bash tests/e2e.sh     # Docker install test (default: Ubuntu 26.10, native architecture)
 ```
 
 ## License

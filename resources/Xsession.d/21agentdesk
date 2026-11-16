@@ -2,5 +2,11 @@
 # 去掉共享的用户总线，由 dbus-launch 为每个 RDP 会话启动独立的 D-Bus。
 unset DBUS_SESSION_BUS_ADDRESS SESSION_MANAGER
 XDG_CONFIG_DIRS="/etc/xdg/agentdesk:${XDG_CONFIG_DIRS:-/etc/xdg}"
-LANG="@LOCALE@"
-export XDG_CONFIG_DIRS LANG
+# @LOCALE@ 在安装时替换；仅非空覆盖值改变语言，并清除优先于 LANG 的消息语言设置。
+# shellcheck disable=SC2157
+if [ -n "@LOCALE@" ]; then
+  LANG="@LOCALE@"
+  unset LANGUAGE LC_ALL LC_MESSAGES
+  export LANG
+fi
+export XDG_CONFIG_DIRS

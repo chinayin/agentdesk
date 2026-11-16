@@ -10,16 +10,18 @@ README 之外的使用细节：安装、连接、桌面维护、软件管理、�
 
 ### 选择系统
 
-XFCE 和 xrdp 用系统官方源的版本，AgentDesk 不单独升级它们；要更新的桌面和远程协议，就选更新的系统。2026-10 官方源中的版本：
+新建桌面默认使用 Ubuntu 26.10。XFCE 和 xrdp 继续使用系统官方源，AgentDesk 不单独编译或升级它们。2026-11 官方源中的版本：
 
 | 系统 | XFCE | xrdp | 建议 |
 |---|---|---|---|
-| Ubuntu 26.04 LTS | 4.20 | 0.10.1 | **推荐** |
-| Debian 13 | 4.20 | 0.10.1 | **推荐** |
+| Ubuntu 26.10 | 4.20 | [0.10.6.1](https://packages.ubuntu.com/stonking/xrdp) | **默认** |
+| Ubuntu 26.04 LTS | 4.20 | 0.10.1 | 可用 |
+| Debian 13 | 4.20 | 0.10.1 | 可用 |
 | Ubuntu 24.04 LTS | 4.18 | 0.9.24 | 可用 |
 | Debian 12 | 4.18 | 0.9.21 | 可用 |
 | Ubuntu 22.04 LTS | 4.16 | 0.9.17 | 能用，不推荐 |
 
+- Ubuntu 26.10 是非 LTS 正式版，[官方支持到 2027 年 7 月](https://ubuntu.com/about/release-cycle)，需在支持结束前升级系统；AgentDesk 不执行操作系统升级。安装与 GUI 验收进度见 [ROADMAP](ROADMAP.md)。
 - amd64 和 arm64（如 AWS Graviton）都支持。
 - Ubuntu 22.04 的桌面较旧，官方渠道无法升级，xrdp 的部分安全补丁只在 Ubuntu Pro 中提供；仍要用时建议 `--rdp-mode tunnel`。不建议用第三方 PPA 升级 XFCE 或 xrdp。
 - 其他 Debian 系会警告后继续安装；更早的版本和非 Debian 系会被拒绝。
@@ -37,16 +39,16 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 | `--theme whitesur\|none` | `whitesur` | `none` 用 Greybird/Adwaita |
 | `--rdp-mode direct\|tunnel` | `direct` | `tunnel` 只监听 127.0.0.1 |
 | `--rdp-port PORT` | `3389` | |
-| `--locale en_US.UTF-8\|zh_CN.UTF-8` | `en_US.UTF-8` | 桌面语言；两种都装中文字体和拼音输入法 |
+| `--locale en_US.UTF-8\|zh_CN.UTF-8` | 跟随系统 | 覆盖桌面语言；始终安装中文字体和拼音输入法 |
 | `--proxy URL` | | 本次运行的 HTTP(S) 代理，不保存 |
 | `--dry-run` | | 只打印操作，不写入、不下载、不提权 |
 
-init 把参数保存到 `/etc/agentdesk/agentdesk.yaml`，之后的命令都以它为默认值，重跑时不必再传。优先级：命令行 > 设置文件 > 默认值。
+init 把参数保存到 `/etc/agentdesk/agentdesk.yaml`，之后的命令都以它为默认值，重跑时不必再传。优先级：命令行 > 设置文件 > 默认值。语言覆盖为空时保留系统语言；已有 `locale` 覆盖值仍会沿用，清空该值后重跑 init 可恢复跟随系统。
 
 ```yaml
 user: agentdesk
 theme: whitesur
-locale: en_US.UTF-8
+locale: ""
 rdp:
   mode: tunnel
   port: 3389

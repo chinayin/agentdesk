@@ -4,12 +4,12 @@
 
 ## 概述
 
-测试分三层，逐层更慢、更接近真实环境，每层只覆盖下一层做不到或太慢的部分。前两层也在 GitHub Actions 上运行：`test.yml` 在每次推送和 PR 时跑离线测试；`e2e.yml` 手动触发，在 `ubuntu-26.04`（amd64）和 `ubuntu-26.04-arm`（arm64）上各跑一遍 E2E，日志和截图作为 artifact 上传。
+测试分三层，逐层更慢、更接近真实环境，每层只覆盖下一层做不到或太慢的部分。前两层也在 GitHub Actions 上运行：`test.yml` 在每次推送和 PR 时跑离线测试；`e2e.yml` 手动触发，在 `ubuntu-26.04`（amd64）和 `ubuntu-26.04-arm`（arm64）运行主机上，各测试一个默认基于 `ubuntu:26.10` 的容器；运行主机版本不决定容器系统版本。日志和截图作为 artifact 上传。
 
 | 层 | 入口 | 耗时 | 证明什么 |
 |---|---|---|---|
 | 离线 | `bash test.sh` | 约 10 秒 | 脚本逻辑、参数、作用域隔离和安全保护正确 |
-| E2E | `bash tests/e2e.sh` | runner 上约 3 分钟；首次下载约 1.3 GB | 能在干净系统（默认 Ubuntu 26.04）上真实安装、重跑、升级、重启，桌面应用能打开窗口 |
+| E2E | `bash tests/e2e.sh` | 视系统与网络而定 | 能在干净系统（默认 Ubuntu 26.10）上真实安装、重跑、升级、重启，桌面应用能打开窗口 |
 | 真机 | `agentdesk-create` skill | 小时级 | 真实 RDP 登录、中文输入、剪贴板、断线重连 |
 
 ## 离线测试：`test.sh`
@@ -39,7 +39,7 @@
 ## Docker E2E：`tests/e2e.sh`
 
 ```bash
-bash tests/e2e.sh                     # Ubuntu 26.04，Docker 本机架构
+bash tests/e2e.sh                     # Ubuntu 26.10，Docker 本机架构
 bash tests/e2e.sh --image debian:13   # 其他系统
 bash tests/e2e.sh --arch amd64        # 指定架构（该架构须能运行 systemd 容器）
 bash tests/e2e.sh --proxy URL         # 受限网络

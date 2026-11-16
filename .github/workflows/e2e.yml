@@ -6,7 +6,7 @@ on:
     inputs:
       image:
         description: Base image
-        default: ubuntu:26.04
+        default: ubuntu:26.10
 
 permissions:
   contents: read

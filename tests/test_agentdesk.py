@@ -142,13 +142,14 @@ class HostTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             release = Path(tmp) / "os-release"
             for system, like, version, arch, status, warned in [
+                ("ubuntu", "debian", "26.10", "amd64", 0, False), ("ubuntu", "debian", "26.10", "arm64", 0, False),
                 ("ubuntu", "debian", "26.04", "amd64", 0, False), ("ubuntu", "debian", "24.04", "arm64", 0, False),
                 ("ubuntu", "debian", "22.04", "amd64", 0, False), ("debian", "", "13", "arm64", 0, False),
                 ("debian", "", "12", "amd64", 0, False),
                 # 新版本与衍生版警告后继续；旧版本、非 Debian 系与其他架构拒绝。
                 ("debian", "", "14", "amd64", 0, True), ("linuxmint", "ubuntu debian", "22", "amd64", 0, True),
                 ("ubuntu", "debian", "20.04", "amd64", 2, False), ("debian", "", "11", "amd64", 2, False),
-                ("fedora", "", "43", "amd64", 2, False), ("ubuntu", "debian", "26.04", "armhf", 2, False),
+                ("fedora", "", "43", "amd64", 2, False), ("ubuntu", "debian", "26.10", "armhf", 2, False),
             ]:
                 release.write_text(f'ID={system}\nID_LIKE="{like}"\nVERSION_ID="{version}"\n')
                 result = self.function('detect_platform "$1" "$2"', release, arch)
@@ -158,11 +159,11 @@ class HostTests(unittest.TestCase):
     def test_os_release_does_not_override_agentdesk_version(self):
         with tempfile.TemporaryDirectory() as tmp:
             release = Path(tmp) / "os-release"
-            release.write_text('NAME="Ubuntu"\nVERSION="26.04.1 LTS (Resolute Raccoon)"\nID=ubuntu\n'
-                               'ID_LIKE=debian\nVERSION_ID="26.04"\n')
+            release.write_text('NAME="Ubuntu"\nVERSION="26.10 (Stonking Stingray)"\nID=ubuntu\n'
+                               'ID_LIKE=debian\nVERSION_ID="26.10"\n')
             result = self.function('before="$VERSION"; detect_platform "$1" amd64; [ "$VERSION" = "$before" ]', release)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Target: ubuntu 26.04 / amd64", result.stderr)
+            self.assertIn("Target: ubuntu 26.10 / amd64", result.stderr)
 
     def test_lock_platform_follows_machine_architecture(self):
         for machine, platform in [("x86_64", "linux-x64"), ("aarch64", "linux-arm64")]:
@@ -345,7 +346,7 @@ class DesktopTests(unittest.TestCase):
 
     def test_defaults_follow_theme_and_locale(self):
         for theme, locale, gtk in [("whitesur", "zh_CN.UTF-8", "WhiteSur-Dark"),
-                                   ("none", "en_US.UTF-8", "Greybird")]:
+                                   ("none", "en_US.UTF-8", "Greybird"), ("none", "", "Greybird")]:
             with self.subTest(theme=theme):
                 result = self.shell(f'THEME={theme}; LOCALE_NAME={locale}; write_desktop_defaults "$1"', self.root)
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -361,6 +362,17 @@ class DesktopTests(unittest.TestCase):
                 session = self.root / "etc/X11/Xsession.d/21agentdesk"
                 text = session.read_text()
                 self.assertIn(f'LANG="{locale}"', text)
+                inherited = {"LANG": "C.UTF-8", "LANGUAGE": "zh_CN", "LC_ALL": "C", "LC_MESSAGES": "C"}
+                applied = subprocess.run(["sh", "-c", '. "$1"; env', "_", str(session)],
+                                         env={"PATH": os.defpath, **inherited}, text=True, capture_output=True)
+                self.assertEqual(applied.returncode, 0, applied.stderr)
+                values = dict(line.split("=", 1) for line in applied.stdout.splitlines() if "=" in line)
+                if locale:
+                    self.assertEqual(values["LANG"], locale)
+                    for key in ("LANGUAGE", "LC_ALL", "LC_MESSAGES"):
+                        self.assertNotIn(key, values)
+                else:
+                    self.assertEqual({key: values[key] for key in inherited}, inherited)
                 self.assertIn('XDG_CONFIG_DIRS="/etc/xdg/agentdesk:${XDG_CONFIG_DIRS:-/etc/xdg}"', text)
                 self.assertIn("unset DBUS_SESSION_BUS_ADDRESS", text)
                 for path in [session, self.root / "etc/X11/Xsession.d/90agentdesk-input",
@@ -511,6 +523,17 @@ class SettingsTests(unittest.TestCase):
         result = self.shell("parse_args verify; " + self.PRINT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "alice none zh_CN.UTF-8 tunnel 3390")
+        result = self.shell('parse_args init --locale en_US.UTF-8; printf "%s" "$LOCALE_NAME"')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "en_US.UTF-8")
+
+    def test_initial_install_does_not_save_an_inherited_language_override(self):
+        for inherited in ("C.UTF-8", "zh_CN.UTF-8"):
+            with self.subTest(inherited=inherited):
+                result = self.shell('parse_args init; write_settings "$SETTINGS_FILE"; '
+                                    'parse_args init; printf "<%s>" "$LOCALE_NAME"', {"LANG": inherited})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "<>")
 
     def test_default_user_is_saved_and_can_be_overridden(self):
         for options, expected in [("", "agentdesk"), ("--user ubuntu", "ubuntu"), ("", "ubuntu")]:
@@ -528,7 +551,7 @@ class SettingsTests(unittest.TestCase):
         result = self.shell("parse_args verify --user carol; " + self.PRINT,
                             {"AGENTDESK_USER": "bob", "AGENTDESK_RDP_PORT": "4000"})
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, "carol whitesur en_US.UTF-8 tunnel 3390")
+        self.assertEqual(result.stdout, "carol whitesur  tunnel 3390")
 
     def test_reader_accepts_comments_and_quotes_and_ignores_unknown_keys(self):
         self.file.parent.mkdir(parents=True)
@@ -538,7 +561,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(result.stdout.splitlines(),
                          ["user=alice", "theme=none", "future=x", "rdp.mode=tunnel", "extra.mode=ignored"])
         result = self.shell("parse_args verify; " + self.PRINT)
-        self.assertEqual(result.stdout, "alice none en_US.UTF-8 tunnel 3389")
+        self.assertEqual(result.stdout, "alice none  tunnel 3389")
 
     def test_invalid_saved_value_is_rejected(self):
         self.file.parent.mkdir(parents=True)

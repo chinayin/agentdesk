@@ -6,7 +6,7 @@
 
 AgentDesk 是一个 Bash CLI，把 Ubuntu/Debian 云主机初始化为 XFCE/xrdp 远程桌面。`agentdesk.sh` 负责系统、账户、桌面和程序安装；软件全部交给原生 mise；云主机由 `agentdesk-create` skill 调用云厂商原生 CLI 创建。不引入自定义配置格式、插件框架、软件别名表或状态数据库。
 
-支持 Ubuntu 22.04/24.04/26.04、Debian 12/13，amd64 与 arm64，推荐 Ubuntu 26.04 或 Debian 13。其他 Debian 系（新版本或衍生版）警告后继续；更早的版本、非 Debian 系和其他架构直接拒绝。架构差异交给 apt 和 mise 按本机架构选包。
+支持 Ubuntu 22.04/24.04/26.04/26.10、Debian 12/13，amd64 与 arm64，新建桌面和 E2E 默认使用 Ubuntu 26.10；验收进度见 [ROADMAP](ROADMAP.md)。其他 Debian 系（新版本或衍生版）警告后继续；更早的版本、非 Debian 系和其他架构直接拒绝。架构差异交给 apt 和 mise 按本机架构选包。
 
 ## 1. 组成
 
@@ -94,7 +94,7 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 - **全部是系统级默认值，不写用户家目录。** 默认值写在 `/etc/xdg/agentdesk/`，由 `21agentdesk` 放到 `XDG_CONFIG_DIRS` 最前（与 Xubuntu 相同），不覆盖软件包自带的 `/etc/xdg`。用户 `~/.config` 中的设置优先，所以所有用户（含之后新增的）共用一份默认值，个人修改自然保留。
 - **配置内容全部在 `resources/`，脚本里只有逻辑。** 随参数变化的值写成占位符（`@THEME_NAME@`、`@ICON_THEME@`、`@LOCALE@`），init 复制时替换；取值都是校验过的固定选项。
 - 覆盖的 XFCE 频道：面板、外观、窗口管理器、背景、终端。左侧 Dock 的启动器引用软件包的 desktop ID，布局与调整方式见[桌面维护](USER_GUIDE.md#4-桌面维护)；背景是 XFCE 原生渐变，为 xorgxrdp 的显示器 rdp0–rdp3 预置。
-- `21agentdesk` 排在 `20dbus_xdg-runtime` 之后、`75dbus_dbus-launch` 之前，取消共享用户总线，让每个 RDP 会话有独立 D-Bus，并设置桌面语言。`90agentdesk-input` 排在 im-config 之后，设置 Fcitx5 变量。
+- `21agentdesk` 排在 `20dbus_xdg-runtime` 之后、`75dbus_dbus-launch` 之前，取消共享用户总线，让每个 RDP 会话有独立 D-Bus；仅在有语言覆盖值时设置桌面语言（见[安装参数](USER_GUIDE.md#参数)）。`90agentdesk-input` 排在 im-config 之后，设置 Fcitx5 变量。
 - `profile.d/agentdesk.sh` 对非 root 用户生效：加入 mise shims 和已安装工具路径（离线解析），交互式 bash 再依次执行 `mise activate` 和 `direnv hook`。XFCE 终端以登录 shell 启动，所以会加载它；`ssh 主机 命令` 这类非登录 shell 不加载。
 - WhiteSur 主题按固定提交装到 `/usr/share`；`--theme none` 用 Greybird/Adwaita。
 - `desktop-reset` 必须加 `--force`：要求该用户先退出全部会话，删除上述频道文件和 `panel/` 目录，不做备份；配置中有符号链接（dotfiles）时拒绝。

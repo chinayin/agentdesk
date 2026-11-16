@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=ubuntu:26.04
+ARG BASE_IMAGE=ubuntu:26.10
 FROM ${BASE_IMAGE}
 ARG TARGETARCH
 ENV container=docker

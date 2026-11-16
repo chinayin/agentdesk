@@ -17,9 +17,9 @@
 
 ## 环境要求
 
-Ubuntu 22.04 / 24.04 / 26.04 或 Debian 12 / 13，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。
+Ubuntu 22.04 / 24.04 / 26.04 / 26.10 或 Debian 12 / 13，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。
 
-新机器推荐 **Ubuntu 26.04 或 Debian 13**。Ubuntu 22.04 建议用 SSH 隧道连接。详见[选择系统](docs/USER_GUIDE.md)。
+新机器默认使用 **Ubuntu 26.10**。Ubuntu 22.04 建议用 SSH 隧道连接。支持周期见[选择系统](docs/USER_GUIDE.md)，验收进度见[路线图](docs/ROADMAP.md)。
 
 ## 安装
 
@@ -34,14 +34,14 @@ curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh 
 参数写在 `bash -s --` 之后：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash -s -- --rdp-mode tunnel --locale zh_CN.UTF-8
+curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash -s -- --rdp-mode tunnel
 ```
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `--user NAME` | `agentdesk` | SSH 和桌面账户，不存在时创建 |
 | `--rdp-mode tunnel` | `direct` | 只监听 127.0.0.1，经 SSH 隧道连接 |
-| `--locale zh_CN.UTF-8` | `en_US.UTF-8` | 桌面语言 |
+| `--locale zh_CN.UTF-8` | 跟随系统 | 覆盖桌面语言 |
 | `--proxy URL` | | 本次运行使用的 HTTP(S) 代理，见下文 |
 
 参数会被保存，重跑安装命令或 `agentdesk init` 时沿用。全部参数见[使用指南](docs/USER_GUIDE.md)。
@@ -107,7 +107,7 @@ agentdesk --help
 ```bash
 sudo bash install.sh  # 在源码目录内安装
 bash test.sh          # 离线测试，约 10 秒
-bash tests/e2e.sh     # 在 Docker 中做安装测试（默认 Ubuntu 26.04、本机架构）
+bash tests/e2e.sh     # 在 Docker 中做安装测试（默认 Ubuntu 26.10、本机架构）
 ```
 
 ## 许可

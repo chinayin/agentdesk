@@ -77,7 +77,7 @@ Init options (saved to /etc/agentdesk/agentdesk.yaml and reused later):
   --theme NAME       whitesur | none (default: whitesur)
   --rdp-mode MODE    direct | tunnel (default: direct)
   --rdp-port PORT    RDP port (default: 3389)
-  --locale NAME      en_US.UTF-8 | zh_CN.UTF-8 (default: en_US.UTF-8)
+  --locale NAME      en_US.UTF-8 | zh_CN.UTF-8 (default: keep system language)
 
 Other options:
   --system           install/upgrade: shared software for all users (admin)
@@ -131,7 +131,7 @@ write_settings() {
 # commands. Command-line options take precedence over this file.
 user: $DESKTOP_USER
 theme: $THEME
-locale: $LOCALE_NAME
+locale: "$LOCALE_NAME"
 rdp:
   mode: $RDP_MODE
   port: $RDP_PORT
@@ -146,7 +146,7 @@ parse_args() {
   THEME=whitesur
   RDP_MODE=direct
   RDP_PORT=3389
-  LOCALE_NAME=en_US.UTF-8
+  LOCALE_NAME=""
   # 优先级：命令行 > 设置文件 > 默认值。
   if [ -r "$SETTINGS_FILE" ]; then
     while IFS='=' read -r key value; do
@@ -193,7 +193,7 @@ parse_args() {
   [ "$RDP_PORT" -ge 1 ] && [ "$RDP_PORT" -le 65535 ] || die "invalid RDP port"
   case "$THEME" in whitesur|none) ;; *) die "theme must be whitesur or none" ;; esac
   case "$RDP_MODE" in direct|tunnel) ;; *) die "RDP mode must be direct or tunnel" ;; esac
-  case "$LOCALE_NAME" in en_US.UTF-8|zh_CN.UTF-8) ;; *) die "unsupported locale" ;; esac
+  case "$LOCALE_NAME" in ""|en_US.UTF-8|zh_CN.UTF-8) ;; *) die "unsupported locale" ;; esac
   if [ "$COMMAND" = desktop-reset ] && [ "$FORCE" -ne 1 ]; then
     usage >&2
     die "desktop-reset deletes personal XFCE settings; add --force to confirm"
@@ -210,7 +210,7 @@ run() {
   fi
 }
 
-# 已验证的版本直接通过；更早的版本缺少依赖，拒绝；其他 Debian 系（新版本、衍生版）警告后继续。
+# 声明支持的版本直接通过；更早的版本缺少依赖，拒绝；其他 Debian 系（新版本、衍生版）警告后继续。
 detect_platform() {
   local release="$1" arch="$2" ID ID_LIKE VERSION_ID
   [ -r "$release" ] || missing "cannot read os-release"
@@ -219,12 +219,12 @@ detect_platform() {
   IFS='|' read -r ID VERSION_ID ID_LIKE < <(. "$release"; printf '%s|%s|%s\n' "${ID:-}" "${VERSION_ID:-}" "${ID_LIKE:-}")
   case "$arch" in amd64|arm64) ;; *) missing "unsupported architecture: $arch (amd64 or arm64 required)" ;; esac
   case "$ID:$VERSION_ID" in
-    ubuntu:22.04|ubuntu:24.04|ubuntu:26.04|debian:12|debian:13) ;;
+    ubuntu:22.04|ubuntu:24.04|ubuntu:26.04|ubuntu:26.10|debian:12|debian:13) ;;
     ubuntu:1*|ubuntu:20.*|ubuntu:21.*|debian:[0-9]|debian:1[01])
       missing "unsupported OS: $ID $VERSION_ID (Ubuntu 22.04+ or Debian 12+ required)" ;;
     *)
       case " $ID $ID_LIKE " in
-        *" debian "*|*" ubuntu "*) warn "untested OS: $ID $VERSION_ID; tested: Ubuntu 22.04/24.04/26.04, Debian 12/13" ;;
+        *" debian "*|*" ubuntu "*) warn "untested OS: $ID $VERSION_ID; supported: Ubuntu 22.04/24.04/26.04/26.10, Debian 12/13" ;;
         *) missing "unsupported OS: $ID $VERSION_ID (Debian or Ubuntu family required)" ;;
       esac ;;
   esac
@@ -250,7 +250,8 @@ preflight() {
     command -v sudo >/dev/null || missing "run as root or install sudo"
     # sudo 清空环境：参数已标准化，代理经 env 显式传入。
     local flags=("$COMMAND" --user "$DESKTOP_USER" --theme "$THEME"
-      --rdp-mode "$RDP_MODE" --rdp-port "$RDP_PORT" --locale "$LOCALE_NAME")
+      --rdp-mode "$RDP_MODE" --rdp-port "$RDP_PORT")
+    if [ -n "$LOCALE_NAME" ]; then flags+=(--locale "$LOCALE_NAME"); fi
     if [ "$FORCE" -eq 1 ]; then flags+=(--force); fi
     proxy_env
     exec sudo /usr/bin/env ${PROXY_ENV[@]+"${PROXY_ENV[@]}"} \
@@ -285,7 +286,7 @@ as_user() {
   run runuser -u "$DESKTOP_USER" -- env -i \
     HOME="$DESKTOP_HOME" USER="$DESKTOP_USER" LOGNAME="$DESKTOP_USER" \
     PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" \
-    ${PROXY_ENV[@]+"${PROXY_ENV[@]}"} TERM=xterm LANG="$LOCALE_NAME" "$@"
+    ${PROXY_ENV[@]+"${PROXY_ENV[@]}"} TERM=xterm LANG="${LOCALE_NAME:-${LANG:-C.UTF-8}}" "$@"
 }
 
 # 允许 32 位色深，否则 xrdp 无法协商 GFX 图形通道。
