@@ -52,7 +52,7 @@ bash tests/e2e.sh --dry-run           # 只打印计划
 | `tests/e2e.sh` | 只接受本地 Docker；构建镜像，启动特权 systemd 容器，复制程序结构，分两阶段执行，导出日志到 `local/e2e/` |
 | `tests/e2e.Dockerfile` | 基础镜像加 systemd、Xvfb 等测试工具；产品软件由真实 `install.sh` 安装 |
 | `tests/e2e-container.sh` | `install` 阶段：安装 → verify → info → `install --system` → 不带参数重跑 init（清单、锁、密码、tunnel 不变）→ 手改通用清单后被覆盖 → `upgrade --system` → 个人安装与原生 `mise use -g` → `upgrade`；`check` 阶段：重启后 verify 并跑 GUI 冒烟 |
-| `tests/e2e-gui.sh` | Xvfb 中启动 XFCE，检查回收站后端，打开 Chrome、VS Code 并截图；VS Code 带 `--no-sandbox`（本地 Docker 中其沙箱无法创建用户命名空间） |
+| `tests/e2e-gui.sh` | Xvfb 中启动 XFCE，检查左侧 Dock 的五个启动器和回收站后端，打开 Chrome、VS Code 并截图；VS Code 带 `--no-sandbox`（本地 Docker 中其沙箱无法创建用户命名空间） |
 
 - 容器不挂载宿主目录或 Docker socket，不开放端口，不读取任何凭据。`--proxy` 只进入镜像构建参数和容器环境。
 - Apple Silicon 上用默认的 arm64；amd64 的 systemd 在模拟环境中会崩溃，入口检测到后以退出码 2 结束。

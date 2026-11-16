@@ -2,7 +2,7 @@
 # AgentDesk CLI：主机初始化、检查、桌面重置与软件命令；不执行用户的 mise task。
 set -euo pipefail
 
-VERSION="0.3.1-dev"
+VERSION="0.4.0"
 # 解析全局入口的软链，资源相对于真实程序目录。
 agentdesk_source="${BASH_SOURCE[0]}"
 while [ -L "$agentdesk_source" ]; do
@@ -614,9 +614,14 @@ install_theme() {
 write_desktop_defaults() {
   local root="$1" item theme_name=Greybird icon_name=Adwaita
   local xdg="$root/etc/xdg/agentdesk"
+  local chrome_desktop=google-chrome.desktop code_desktop=code.desktop
+  # 新版应用改用反向域名 desktop ID；已有主机仍可沿用旧安装包。
+  if [ -f "$root/usr/share/applications/com.google.Chrome.desktop" ]; then chrome_desktop=com.google.Chrome.desktop; fi
+  if [ -f "$root/usr/share/applications/com.microsoft.VSCode.desktop" ]; then code_desktop=com.microsoft.VSCode.desktop; fi
   if [ "$THEME" = whitesur ]; then theme_name=WhiteSur-Dark; icon_name=WhiteSur-dark; fi
   # 占位符的取值都是校验过的固定选项，不含 sed 特殊字符。
-  local placeholders=(-e "s/@THEME_NAME@/$theme_name/g" -e "s/@ICON_THEME@/$icon_name/g" -e "s/@LOCALE@/$LOCALE_NAME/g")
+  local placeholders=(-e "s/@THEME_NAME@/$theme_name/g" -e "s/@ICON_THEME@/$icon_name/g" -e "s/@LOCALE@/$LOCALE_NAME/g"
+    -e "s/@CHROME_DESKTOP@/$chrome_desktop/g" -e "s/@CODE_DESKTOP@/$code_desktop/g")
   render() { sed "${placeholders[@]}" "$1" > "$2"; chmod 0644 "$2"; }
   while IFS= read -r item; do
     mkdir -p "$xdg/$(dirname "$item")"

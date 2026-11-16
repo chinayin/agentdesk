@@ -388,10 +388,29 @@ class DesktopTests(unittest.TestCase):
                 self.assertEqual(leftovers, [])
 
     def test_panel_launchers_reference_installed_applications(self):
-        panel = (ROOT / "resources/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml").read_text()
-        for app in ["google-chrome", "code", "xfce4-terminal", "thunar", "xfce4-appfinder"]:
-            self.assertIn(f'value="{app}.desktop"', panel)
-        self.assertNotIn("agentdesk.desktop", panel)
+        current = ["com.google.Chrome.desktop", "com.microsoft.VSCode.desktop"]
+        legacy = ["google-chrome.desktop", "code.desktop"]
+        common = ["xfce4-terminal.desktop", "thunar.desktop", "xfce4-appfinder.desktop"]
+        for installed, selected in [(current, current), (legacy, legacy),
+                                    (current + legacy, current),
+                                    ([current[0], legacy[1]], [current[0], legacy[1]])]:
+            with self.subTest(installed=installed), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                applications = root / "usr/share/applications"
+                applications.mkdir(parents=True)
+                for name in installed + common:
+                    (applications / name).write_text("[Desktop Entry]\nType=Application\nExec=true\n")
+                result = self.shell('THEME=none; LOCALE_NAME=; write_desktop_defaults "$1"', root)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                panel = xml.dom.minidom.parse(str(
+                    root / "etc/xdg/agentdesk/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml"))
+                launchers = [prop for prop in panel.getElementsByTagName("property")
+                             if prop.getAttribute("value") == "launcher"]
+                desktop_files = [prop.getElementsByTagName("value")[0].getAttribute("value")
+                                 for prop in launchers]
+                self.assertCountEqual(desktop_files, selected + common)
+                for name in desktop_files:
+                    self.assertTrue((applications / name).is_file(), name)
 
     def login_env(self, uid):
         tools = self.root / "tools"
