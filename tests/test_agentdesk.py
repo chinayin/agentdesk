@@ -408,9 +408,12 @@ class DesktopTests(unittest.TestCase):
                              if prop.getAttribute("value") == "launcher"]
                 desktop_files = [prop.getElementsByTagName("value")[0].getAttribute("value")
                                  for prop in launchers]
-                self.assertCountEqual(desktop_files, selected + common)
+                # 厂商应用使用完整路径，避免依赖 XFCE 菜单池是否收录其 desktop ID。
+                self.assertCountEqual(desktop_files,
+                                      [f"/usr/share/applications/{name}" for name in selected] + common)
                 for name in desktop_files:
-                    self.assertTrue((applications / name).is_file(), name)
+                    path = root / name.lstrip("/") if name.startswith("/") else applications / name
+                    self.assertTrue(path.is_file(), name)
 
     def login_env(self, uid):
         tools = self.root / "tools"

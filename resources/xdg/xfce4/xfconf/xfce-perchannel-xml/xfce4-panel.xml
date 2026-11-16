@@ -56,10 +56,10 @@
       <property name="grouping" type="uint" value="1"/>
     </property>
     <property name="plugin-14" type="string" value="launcher">
-      <property name="items" type="array"><value type="string" value="@CHROME_DESKTOP@"/></property>
+      <property name="items" type="array"><value type="string" value="/usr/share/applications/@CHROME_DESKTOP@"/></property>
     </property>
     <property name="plugin-15" type="string" value="launcher">
-      <property name="items" type="array"><value type="string" value="@CODE_DESKTOP@"/></property>
+      <property name="items" type="array"><value type="string" value="/usr/share/applications/@CODE_DESKTOP@"/></property>
     </property>
   </property>
 </channel>
