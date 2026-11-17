@@ -17,9 +17,9 @@ Turn a fresh Ubuntu/Debian cloud server into a ready-to-use remote desktop for A
 
 ## Requirements
 
-**Debian 13** (recommended) or Ubuntu 26.10, amd64 or arm64, systemd, root or a sudo user.
+Debian/Ubuntu, amd64 or arm64, systemd, root or a sudo user. Verified on **Debian 13** (recommended) and Ubuntu 26.10.
 
-See [choosing a system](docs/USER_GUIDE.md) for why Debian 13 is recommended, support periods and verification status. Other Debian/Ubuntu releases install with a warning and are unverified.
+See [choosing a system](docs/USER_GUIDE.md) for why Debian 13 is recommended, support periods and verification status. Other Debian/Ubuntu releases are supported but unverified; check them yourself.
 
 ## Install
 

@@ -17,9 +17,9 @@
 
 ## 环境要求
 
-**Debian 13**（推荐）或 Ubuntu 26.10，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。
+Debian/Ubuntu，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。已验证 **Debian 13**（推荐）和 Ubuntu 26.10。
 
-推荐 Debian 13 的原因、支持周期和验证状态见[选择系统](docs/USER_GUIDE.md)。其他 Debian/Ubuntu 版本会警告后继续安装，未经验证。
+推荐 Debian 13 的原因、支持周期和验证状态见[选择系统](docs/USER_GUIDE.md)。其他 Debian/Ubuntu 版本同样支持，但未经验证，需要自己验证。
 
 ## 安装
 

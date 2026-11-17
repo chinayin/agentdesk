@@ -211,7 +211,7 @@ run() {
   fi
 }
 
-# 只声明支持 Debian 13 与 Ubuntu 26.10；更早的版本缺少依赖，拒绝；其他 Debian 系警告后继续，由用户自行验证。
+# Debian 13 与 Ubuntu 26.10 经过验证；其他 Debian 系同样支持，但未经验证，警告后继续；更早的版本缺少依赖，拒绝。
 # 结果记入 OS_RELEASE（如 debian:13），供安装软件包时区分系统。
 OS_RELEASE=""
 
@@ -229,7 +229,7 @@ detect_platform() {
       missing "unsupported OS: $ID $VERSION_ID (Ubuntu 22.04+ or Debian 12+ required)" ;;
     *)
       case " $ID $ID_LIKE " in
-        *" debian "*|*" ubuntu "*) warn "untested OS: $ID $VERSION_ID; supported: Debian 13, Ubuntu 26.10; verify this system yourself" ;;
+        *" debian "*|*" ubuntu "*) warn "untested OS: $ID $VERSION_ID; verified: Debian 13, Ubuntu 26.10; verify this system yourself" ;;
         *) missing "unsupported OS: $ID $VERSION_ID (Debian or Ubuntu family required)" ;;
       esac ;;
   esac

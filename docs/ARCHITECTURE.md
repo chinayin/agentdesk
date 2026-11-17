@@ -6,7 +6,7 @@
 
 AgentDesk 是一个 Bash CLI，把 Ubuntu/Debian 云主机初始化为 XFCE/xrdp 远程桌面。`agentdesk.sh` 负责系统、账户、桌面和程序安装；软件全部交给原生 mise；云主机由 `agentdesk-create` skill 调用云厂商原生 CLI 创建。不引入自定义配置格式、插件框架、软件别名表或状态数据库。
 
-声明支持 Debian 13（推荐）和 Ubuntu 26.10，amd64 与 arm64，E2E 默认使用 Debian 13；系统选择与验证状态见 [USER_GUIDE](USER_GUIDE.md#选择系统)。其他 Debian 系警告后继续，由用户自行验证；更早的版本、非 Debian 系和其他架构直接拒绝。架构差异交给 apt 和 mise 按本机架构选包。
+支持 Debian 系，amd64 与 arm64；经过验证的是 Debian 13（推荐）和 Ubuntu 26.10，E2E 默认使用 Debian 13，系统选择见 [USER_GUIDE](USER_GUIDE.md#选择系统)。其他 Debian 系版本同样支持但未经验证，警告后继续；更早的版本、非 Debian 系和其他架构直接拒绝。架构差异交给 apt 和 mise 按本机架构选包。
 
 ## 1. 组成
 

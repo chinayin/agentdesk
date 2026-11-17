@@ -10,7 +10,7 @@ README 之外的使用细节：安装、连接、桌面维护、软件管理、�
 
 ### 选择系统
 
-支持两个系统，新建桌面优先用 **Debian 13**：
+以下两个系统经过验证，新建桌面优先用 **Debian 13**：
 
 | 系统 | XFCE | xrdp | 系统支持期 | 验证状态 |
 |---|---|---|---|---|
@@ -20,7 +20,7 @@ README 之外的使用细节：安装、连接、桌面维护、软件管理、�
 - amd64 和 arm64（如 AWS Graviton）都支持。AWS Lightsail 只有 Debian 13（没有 Ubuntu 26.x），见 [agentdesk-create](../skills/agentdesk-create/SKILL.md)。
 - Debian 13 自带的 xrdp 是 0.10.1，没有 H.264。init 只把 xrdp 和 xorgxrdp 换成官方 trixie-backports 中的版本（系统没配置时自动添加该源），其余软件包仍来自 stable。backports 不在 Debian 安全团队的自动更新范围内，所以每次 `sudo agentdesk init` 都会把这两个包升到 backports 的最新版；升级会重启 xrdp，先退出桌面再运行。
 - Ubuntu 26.10 的 XFCE 和 xrdp 都来自官方源。它是非 LTS 版本，需在支持结束前升级系统；AgentDesk 不执行操作系统升级。
-- 其他 Debian/Ubuntu 版本会警告后继续安装，但没有验证过，需要自己验证；更早的版本和非 Debian 系会被拒绝。
+- 其他 Debian/Ubuntu 版本同样支持，安装时提示未经验证，需要自己验证；Ubuntu 22.04、Debian 12 之前的版本和非 Debian 系会被拒绝。
 
 ### 参数
 
