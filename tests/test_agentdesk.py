@@ -384,7 +384,10 @@ class HostTests(unittest.TestCase):
             lines = [line for line in policy.read_text().splitlines() if line and not line.startswith("#")]
             # root 用 sudo passwd 设置密码时也必须强制，否则只是警告。
             self.assertEqual(lines, ["minlen = 10", "minclass = 3", "enforce_for_root"])
-        self.assertIn("libpam-pwquality", self.function('DRY_RUN=1; install_packages').stderr)
+        packages = self.function('DRY_RUN=1; install_packages').stderr
+        # 缺少字典时 pwquality 拒绝所有密码。
+        self.assertIn("libpam-pwquality", packages)
+        self.assertIn("cracklib-runtime", packages)
 
     INIT = ('INIT_LOG_DIR="$1"; initialize() { echo "progress" >&2; echo "connection details"; '
             'return "$INIT_STATUS"; }; DRY_RUN=0; run_init')
