@@ -16,7 +16,7 @@ Determine from the request, existing deployment records and native CLI queries:
 - SSH user, desktop user, locale, theme; direct RDP, private network/VPN, or SSH tunnel.
 - Source CIDR for direct access, and whether to keep or delete the resources afterwards.
 
-For Alibaba Cloud Ubuntu, default the initial SSH user to `root` with key-pair authentication. The AgentDesk work account defaults to `agentdesk`, overridden by `--user`.
+On Alibaba Cloud the initial SSH user is `root` with key-pair authentication. The AgentDesk work account defaults to `agentdesk`, overridden by `--user`.
 
 On AWS, default to Lightsail with Debian 13 and the 2 vCPU / 8 GB plan, which costs a third to a half less than the equivalent EC2 setup. Use EC2 only when the user asks for it, needs Ubuntu 26.x (Lightsail has no 26.x image), needs arm64, or will keep the desktop stopped most of the time (Lightsail bills stopped instances in full; EC2 then bills only disk and IP). Unless the user names an OS, use Debian 13 everywhere; use Ubuntu 26.10 when the user asks for Ubuntu. These two are verified; other Debian/Ubuntu releases also work but are unverified, so use one only when the user asks and record it as unverified. Stay within the scope the user authorized. Ask only for required values that cannot be derived. Do not confuse the cloud key pair name with the local private key path. Check public key fingerprints or real SSH authentication only; never read, copy or print private key contents.
 

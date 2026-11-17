@@ -132,7 +132,6 @@ agentdesk upgrade --system                    # 管理员：升级全机共享�
 - `outdated` 只列 mise 工具，不含 apt 包。`upgrade` 和 `outdated` 不接受软件名；单独升级用原生命令（`mise lock --bump NAME` 再 `mise install --locked`）。`node = "26"` 保持在 26.x，`latest` 可能跨大版本。
 - 需要额外部署步骤的软件，在个人清单里写 `[tasks]`，用 `agentdesk run TASK` 执行。
 - 软件命令固定在 `/` 下执行，不读当前项目的 `mise.toml`；项目里的版本按 mise 原生规则切换。
-- 已知限制：mise 2026.10.17 在个人清单覆盖全机预装工具的版本时（如个人写 `node = "22"`），会去改共享目录的链接并报 `runtime symlink repair(s) failed`。需要别的版本时写在项目的 `mise.toml` 里，或由管理员写进 `config.local.toml`。
 
 ## 6. 预装软件
 
