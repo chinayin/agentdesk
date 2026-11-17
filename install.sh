@@ -33,7 +33,7 @@ Options:
 EOF
 }
 
-# 与 agentdesk.sh 相同：只对本次运行生效，不保存；apt 不支持 SOCKS。
+# 与 agentdesk.sh 相同（测试比对两份函数体）：只对本次运行生效，不保存；apt 不支持 SOCKS。
 use_proxy() {
   [[ "$1" =~ ^https?://[^[:space:]/]+/?$ ]] || { usage >&2; die "--proxy must be an http(s)://host:port URL"; }
   export http_proxy="$1" https_proxy="$1" all_proxy="$1" HTTP_PROXY="$1" HTTPS_PROXY="$1" ALL_PROXY="$1"
@@ -43,12 +43,15 @@ use_proxy() {
 
 fetch() { curl -fsSL --retry 3 --connect-timeout 20 "$@"; }
 
-# /releases/latest 跳转到最新标签；还没有发布时停在 releases 页面。
-latest_ref() {
-  local url
-  url="$(fetch -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest")" || return 1
-  [[ "${url##*/}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
-  printf '%s\n' "${url##*/}"
+# 与 agentdesk.sh 相同（测试比对两份函数体）：
+# /releases/latest 跳转到最新标签（不走有频率限制的 API）；还没有发布时返回 1。
+latest_release_tag() {
+  local url tag
+  url="$(curl -fsSL --retry 3 --connect-timeout 20 -o /dev/null -w '%{url_effective}' \
+    "https://github.com/$1/releases/latest")" || return 1
+  tag="${url##*/}"
+  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
+  printf '%s\n' "$tag"
 }
 
 run_source() {
@@ -98,7 +101,7 @@ main() {
   command -v curl >/dev/null || missing "curl is required"
   command -v tar >/dev/null || missing "tar is required"
   if [ -z "$REF" ]; then
-    REF="$(latest_ref)" ||
+    REF="$(latest_release_tag "$REPO")" ||
       missing "no AgentDesk release found; install the development branch with: bash -s -- --ref main"
   fi
   tmp="$(mktemp -d)"

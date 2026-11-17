@@ -324,6 +324,124 @@ class HostTests(unittest.TestCase):
                 self.assertEqual(result.returncode, status, (content, result.stderr))
                 self.assertEqual(result.stdout.strip(), endpoint)
 
+    def test_ssh_ports_come_from_effective_configuration(self):
+        result = self.function('SSHD=sshd_output; sshd_output() { printf "port 22\\nPort 2222\\nlistenaddress 0.0.0.0\\n"; }; '
+                               'ssh_ports')
+        self.assertEqual(result.stdout.splitlines(), ["22", "2222"], result.stderr)
+
+    def test_ssh_listener_accepts_any_address_on_each_port(self):
+        listeners = ('LISTEN 0 128 0.0.0.0:2222 0.0.0.0:*\\nLISTEN 0 128 [::]:22 [::]:*\\n'
+                     'LISTEN 0 10 127.0.0.1:3389 0.0.0.0:*\\n')
+        for ports, status in [("2222", 0), ("22 2222", 0), ("3389", 0), ("222", 1), ("22 2200", 1), ("", 1)]:
+            with self.subTest(ports=ports):
+                result = self.function(f'ss() {{ printf "{listeners}"; }}; ssh_listener_ready {ports}')
+                self.assertEqual(result.returncode, status, result.stderr)
+
+    def test_security_updates_require_package_and_periodic_setting(self):
+        for installed, value, status in [(0, "1", 0), (0, "0", 1), (0, "", 1), (1, "1", 1)]:
+            with self.subTest(installed=installed, value=value):
+                result = self.function(
+                    f'package_installed() {{ return {installed}; }}; '
+                    f'apt-config() {{ printf "%s=\'%s\'\\n" "$2" "{value}"; }}; security_updates_enabled')
+                self.assertEqual(result.returncode, status, result.stderr)
+
+    VERIFY = ('DESKTOP_USER=desk; package_installed() { return 0; }; systemctl() { return 0; }; '
+              'ss() { printf "LISTEN 0 128 0.0.0.0:2222 0.0.0.0:*\\nLISTEN 0 10 127.0.0.1:3389 0.0.0.0:*\\n"; }; '
+              'ssh_ports() { echo 2222; }; ssh_password_enabled() { return 0; }; password_ready() { return 0; }; '
+              'test() { return 0; }; shared_tools_ready() { return "$TOOLS"; }; '
+              'security_updates_enabled() { return 1; }; '
+              'xrdp_endpoint() { echo 127.0.0.1:3389; }; verify')
+
+    def test_verify_warns_without_failing_and_checks_custom_ssh_port(self):
+        result = self.function('TOOLS=0; ' + self.VERIFY)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("[PASS] SSH listener TCP 2222", result.stdout)
+        self.assertIn("[PASS] google-chrome-stable installed", result.stdout)
+        self.assertIn("[PASS] password policy present", result.stdout)
+        self.assertIn("[WARN] automatic security updates: run sudo apt-get install unattended-upgrades",
+                      result.stdout)
+        self.assertNotIn("[FAIL]", result.stdout)
+        result = self.function('TOOLS=1; ' + self.VERIFY)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("[FAIL] shared tools installed", result.stdout)
+
+    def test_shared_tools_are_ready_only_when_none_are_missing(self):
+        for output, status, expected in [("", 0, 0), ("node 26.1.0 (missing)", 0, 1), ("", 3, 1)]:
+            with self.subTest(output=output, status=status):
+                result = self.function(f'system_mise() {{ printf "%s" "{output}"; return {status}; }}; '
+                                       'shared_tools_ready')
+                self.assertEqual(result.returncode, expected, result.stderr)
+
+    def test_password_policy_requires_ten_characters_and_three_classes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.function('DRY_RUN=1; configure_password_policy "$1"', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+            result = self.function('DRY_RUN=0; configure_password_policy "$1"', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            policy = Path(tmp) / "etc/security/pwquality.conf.d/agentdesk.conf"
+            self.assertEqual(policy.stat().st_mode & 0o777, 0o644)
+            lines = [line for line in policy.read_text().splitlines() if line and not line.startswith("#")]
+            # root 用 sudo passwd 设置密码时也必须强制，否则只是警告。
+            self.assertEqual(lines, ["minlen = 10", "minclass = 3", "enforce_for_root"])
+        self.assertIn("libpam-pwquality", self.function('DRY_RUN=1; install_packages').stderr)
+
+    INIT = ('INIT_LOG_DIR="$1"; initialize() { echo "progress" >&2; echo "connection details"; '
+            'return "$INIT_STATUS"; }; DRY_RUN=0; run_init')
+
+    def test_init_log_records_progress_but_not_connection_details(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            logs = Path(tmp) / "logs"
+            result = self.function('INIT_STATUS=0; ' + self.INIT, logs)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "connection details\n")
+            self.assertIn("progress", result.stderr)
+            self.assertEqual(logs.stat().st_mode & 0o777, 0o700)
+            [log] = logs.iterdir()
+            self.assertRegex(log.name, r"^init-\d{8}-\d{6}\.log$")
+            self.assertEqual(log.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(log.read_text(), "progress\n")
+            self.assertIn(f"Log: {log}", result.stderr)
+
+    def test_failed_init_keeps_exit_code_and_points_to_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            logs = Path(tmp) / "logs"
+            result = self.function('INIT_STATUS=3; ' + self.INIT, logs)
+            self.assertEqual(result.returncode, 3, result.stderr)
+            [log] = logs.iterdir()
+            self.assertIn(f"init failed (exit 3); log: {log}", result.stderr)
+
+    def test_init_keeps_the_five_newest_logs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            logs = Path(tmp) / "logs"
+            logs.mkdir()
+            for day in range(1, 8):
+                (logs / f"init-2026010{day}-000000.log").write_text("old")
+            result = self.function('INIT_STATUS=0; ' + self.INIT, logs)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            names = sorted(p.name for p in logs.iterdir())
+            self.assertEqual(len(names), 5)
+            self.assertEqual(names[0], "init-20260104-000000.log")
+
+    def test_init_dry_run_writes_no_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            logs = Path(tmp) / "logs"
+            result = self.function('INIT_STATUS=0; ' + self.INIT.replace("DRY_RUN=0", "DRY_RUN=1"), logs)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(logs.exists())
+
+    def test_user_guide_lists_every_init_option(self):
+        # 参数表是契约文档中最容易与代码漂移的部分。
+        guide = (ROOT / "docs/USER_GUIDE.md").read_text()
+        section = guide.split("### 参数", 1)[1].split("\n### ", 1)[0]
+        documented = set(re.findall(r"^\| `(--[a-z-]+)", section, re.M))
+        usage = self.invoke("--help").stdout
+        init = usage.split("Init options", 1)[1].split("Other options", 1)[0]
+        installer = subprocess.run(["bash", str(ROOT / "install.sh"), "--help"],
+                                   text=True, capture_output=True).stdout
+        self.assertLessEqual(set(re.findall(r"^  (--[a-z-]+)", init, re.M)), documented)
+        self.assertLessEqual(documented, set(re.findall(r"--[a-z-]+", usage + installer)))
+
     def test_options_may_precede_software_commands(self):
         result = self.invoke("--dry-run", "install", "ruff")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -717,6 +835,82 @@ class InfoTests(unittest.TestCase):
         self.assertIn("not initialized", result.stderr)
 
 
+@unittest.skipUnless(shutil.which("openssl"), "openssl is required for certificate fingerprints")
+class FingerprintTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name)
+        for name in ["cert.pem", "custom.pem"]:
+            subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                            "-subj", "/CN=test", "-keyout", str(self.base / f"{name}.key"),
+                            "-out", str(self.base / name)], check=True, capture_output=True)
+
+    def expected(self, name):
+        output = subprocess.run(["openssl", "x509", "-noout", "-fingerprint", "-sha256", "-in",
+                                 str(self.base / name)], check=True, text=True, capture_output=True).stdout
+        return output.strip().split("=", 1)[1]
+
+    def fingerprint(self, ini):
+        (self.base / "xrdp.ini").write_text(ini)
+        return subprocess.run(["bash", "-c", 'source "$1"; XRDP_INI="$2"; rdp_fingerprint', "_",
+                               str(ROOT / "agentdesk.sh"), str(self.base / "xrdp.ini")],
+                              text=True, capture_output=True).stdout.strip()
+
+    def test_default_relative_and_absolute_certificates(self):
+        self.assertEqual(self.fingerprint("[Globals]\ncertificate=\n"), self.expected("cert.pem"))
+        self.assertEqual(self.fingerprint("[Globals]\nport=3389\n"), self.expected("cert.pem"))
+        self.assertEqual(self.fingerprint("[Globals]\ncertificate=custom.pem\n"), self.expected("custom.pem"))
+        self.assertEqual(self.fingerprint(f"[Globals]\ncertificate = {self.base / 'custom.pem'}\n"),
+                         self.expected("custom.pem"))
+        self.assertEqual(self.fingerprint("[Xorg]\ncertificate=custom.pem\n"), self.expected("cert.pem"))
+        self.assertEqual(self.fingerprint("[Globals]\ncertificate=missing.pem\n"), "")
+
+
+class AwkCompatibilityTests(unittest.TestCase):
+    """Debian 默认 mawk，Ubuntu 和 init 之后为 gawk，macOS 为 BWK awk；解析结果必须一致。"""
+
+    SCRIPT = (
+        'source "$1"; settings_read "$2"; echo ---; '
+        'render_xrdp "$3" "$4" tunnel 3390; cat "$4"; echo ---; xrdp_endpoint "$4"; echo ---; '
+        'DESKTOP_USER=desk; SSHD=sshd_output; sshd_output() { printf "PasswordAuthentication yes\\nPermitEmptyPasswords no\\n'
+        'AuthenticationMethods any\\nport 22\\nPort 2222\\n"; }; '
+        'ssh_password_enabled && echo password; ssh_ports; '
+        'SSHD_CONFIG="$5"; SSHD_DROPIN=/etc/ssh/sshd_config.d/00-agentdesk.conf; '
+        'ssh_dropin_included && echo included; '
+        'printf "LISTEN 0 10 127.0.0.1:3390 0.0.0.0:*\\n" | listener_matches 127.0.0.1:3390 && echo listener; '
+        'printf "LISTEN 0 10 [::]:2222 [::]:*\\n" | port_matches 2222 && echo port'
+    )
+    EXPECTED = (
+        "user=alice\ntheme=none\nlocale=zh_CN.UTF-8\nrdp.mode=tunnel\nrdp.port=3390\n---\n"
+        "[Globals]\nport=tcp://127.0.0.1:3390\nmax_bpp=32\n[Xorg]\nport=-1\n---\n127.0.0.1:3390\n---\n"
+        "password\n22\n2222\nincluded\nlistener\nport\n"
+    )
+
+    def test_parsers_agree_across_awk_implementations(self):
+        # 未安装的实现跳过；Debian/Ubuntu 默认带 mawk。
+        candidates = {name: shutil.which(name) for name in ["mawk", "gawk", "awk"]}
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "settings.yaml").write_text(
+                "# saved\nuser: 'alice'  # inline\ntheme: none\nlocale: \"zh_CN.UTF-8\"\nrdp:\n  mode: tunnel\n  port: 3390\n")
+            (base / "xrdp.ini").write_text("[Globals]\nport=3389\nmax_bpp=24\n[Xorg]\nport=-1\n")
+            (base / "sshd_config").write_text("Include /etc/ssh/sshd_config.d/*.conf\nMatch User other\n")
+            for name, path in candidates.items():
+                if not path:
+                    continue
+                with self.subTest(awk=name):
+                    stubs = base / f"bin-{name}"
+                    stubs.mkdir()
+                    (stubs / "awk").symlink_to(path)
+                    result = subprocess.run(
+                        ["bash", "-c", self.SCRIPT, "_", str(ROOT / "agentdesk.sh"), str(base / "settings.yaml"),
+                         str(base / "xrdp.ini"), str(base / f"out-{name}"), str(base / "sshd_config")],
+                        env={**os.environ, "PATH": f"{stubs}:{os.environ['PATH']}"}, text=True, capture_output=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, self.EXPECTED)
+
+
 class UpdateTests(unittest.TestCase):
     """agentdesk update：自我更新，相当于 brew update。下载交给已安装的 install.sh，这里用假 install.sh。"""
 
@@ -803,6 +997,39 @@ class UpdateTests(unittest.TestCase):
                          (ROOT / "agentdesk.sh").read_bytes())
         self.assertEqual((root / "usr/local/lib/agentdesk/mise.toml").read_bytes(),
                          (ROOT / "mise.toml").read_bytes())
+
+    PROGRAM = ('source "$1"; SETTINGS_FILE="$2/etc/agentdesk/agentdesk.yaml"; '
+               'stat() { case "$1 $2" in "-c %u") echo 0 ;; "-c %a") echo 755 ;; '
+               '*) command stat "$@" ;; esac; }; ')
+
+    def old_program(self, root):
+        destination = root / "usr/local/lib/agentdesk"
+        (destination / "resources").mkdir(parents=True)
+        (destination / "agentdesk.sh").write_text("old program\n")
+        (destination / "resources/removed-in-new-version").write_text("stale\n")
+        return destination
+
+    def test_program_update_replaces_the_whole_directory(self):
+        root = self.base / "target"
+        destination = self.old_program(root)
+        result = subprocess.run(["bash", "-c", self.PROGRAM + 'install_program 1 "$2"', "_",
+                                 str(ROOT / "agentdesk.sh"), str(root)], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((destination / "agentdesk.sh").read_bytes(), (ROOT / "agentdesk.sh").read_bytes())
+        self.assertFalse((destination / "resources/removed-in-new-version").exists())
+        self.assertEqual(sorted(p.name for p in destination.parent.iterdir()), ["agentdesk"])
+
+    def test_program_update_failure_keeps_installed_program(self):
+        root = self.base / "target"
+        destination = self.old_program(root)
+        fail = 'install() { case "$*" in *profile.d*) return 1 ;; *) command install "$@" ;; esac; }; '
+        result = subprocess.run(["bash", "-c", self.PROGRAM + fail + 'install_program 1 "$2"', "_",
+                                 str(ROOT / "agentdesk.sh"), str(root)], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("installed program unchanged", result.stderr)
+        self.assertEqual((destination / "agentdesk.sh").read_text(), "old program\n")
+        self.assertTrue((destination / "resources/removed-in-new-version").exists())
+        self.assertEqual(sorted(p.name for p in destination.parent.iterdir()), ["agentdesk"])
 
     def test_program_update_dry_run_does_not_apply_software_list(self):
         result = self.shell("DRY_RUN=1; install_program 1")
@@ -967,6 +1194,14 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(self.url.read_text().strip(),
                          "https://github.com/chinayin/agentdesk/archive/v1.2.3.tar.gz")
         self.assertNotEqual(self.log.read_text().splitlines()[0], "agentdesk-main")
+
+    def test_shared_functions_match_agentdesk(self):
+        # install.sh 必须能单独运行，所以重复这两个函数；两份必须一致。
+        def body(path, name):
+            return re.search(rf"^{name}\(\) \{{\n.*?^\}}\n", path.read_text(), re.S | re.M).group(0)
+        for name in ["use_proxy", "latest_release_tag"]:
+            with self.subTest(name=name):
+                self.assertEqual(body(ROOT / "install.sh", name), body(ROOT / "agentdesk.sh", name))
 
     def test_invalid_ref_is_rejected_before_download(self):
         with open(ROOT / "install.sh") as script:

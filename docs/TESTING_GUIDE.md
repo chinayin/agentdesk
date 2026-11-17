@@ -23,7 +23,7 @@
 
 | 文件 | 覆盖 |
 |---|---|
-| `tests/test_agentdesk.py` | 主脚本：参数与帮助、系统与架构判断、桌面默认值与模板、登录环境、desktop-reset、设置文件、`info`/`rdp`、自我更新、install.sh、代理 |
+| `tests/test_agentdesk.py` | 主脚本：参数与帮助、系统与架构判断、桌面默认值与模板、登录环境、desktop-reset、设置文件、`verify`、密码规则、init 日志、`info`/`rdp` 与证书指纹、自我更新与程序整体替换、install.sh、代理；已安装的 mawk、gawk 与系统 awk 解析一致；USER_GUIDE 参数表与 `--help` 一致；install.sh 与 agentdesk.sh 的重复函数一致 |
 | `tests/test_software.py` | 软件命令：个人与 `--system` 作用域、忽略系统清单的范围、参数拒绝、退出码透传、代理传递 |
 | `tests/test_mise_integration.py` | 真实 mise：配置写入与隔离、系统目录加载顺序、个人安装保留只读系统锁、任务输出；只用本地测试文件，不联网。需 `AGENTDESK_TEST_MISE="$(command -v mise)"`，版本基线见[架构说明](ARCHITECTURE.md#4-软件) |
 | `tests/test_ssh.py` | 新旧 sshd 输出格式、真实配置解析、工作账户隔离和失败恢复；不操作主机 SSH 服务 |
@@ -51,7 +51,7 @@ bash tests/e2e.sh --dry-run           # 只打印计划
 |---|---|
 | `tests/e2e.sh` | 只接受本地 Docker；构建镜像，启动特权 systemd 容器，复制程序结构，分两阶段执行，导出日志到 `local/e2e/` |
 | `tests/e2e.Dockerfile` | 基础镜像加 systemd、Xvfb 等测试工具；产品软件由真实 `install.sh` 安装 |
-| `tests/e2e-container.sh` | `install` 阶段：安装 → verify → info → `install --system` → 不带参数重跑 init（清单、锁、密码、tunnel 不变）→ 手改通用清单后被覆盖 → `upgrade --system` → 个人安装与原生 `mise use -g` → `upgrade`；`check` 阶段：重启后 verify 并跑 GUI 冒烟 |
+| `tests/e2e-container.sh` | `install` 阶段：安装 → init 日志存在 → 弱密码被 chpasswd 拒绝 → verify → info（含证书指纹）→ `install --system` → 不带参数重跑 init（清单、锁、密码、tunnel 不变）→ 手改通用清单后被覆盖 → `upgrade --system` → `outdated --system` → 个人安装与原生 `mise use -g` → `upgrade` → `outdated`；`check` 阶段：重启后 verify 并跑 GUI 冒烟 |
 | `tests/e2e-gui.sh` | Xvfb 中启动 XFCE，检查左侧 Dock 的五个启动器和回收站后端，打开 Chrome、VS Code 并截图；VS Code 带 `--no-sandbox`（本地 Docker 中其沙箱无法创建用户命名空间） |
 
 - 容器不挂载宿主目录或 Docker socket，不开放端口，不读取任何凭据。`--proxy` 只进入镜像构建参数和容器环境。

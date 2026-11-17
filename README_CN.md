@@ -19,7 +19,7 @@
 
 Ubuntu 22.04 / 24.04 / 26.04 / 26.10 或 Debian 12 / 13，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。
 
-新机器默认使用 **Ubuntu 26.10**。Ubuntu 22.04 建议用 SSH 隧道连接。支持周期见[选择系统](docs/USER_GUIDE.md)，验收进度见[路线图](docs/ROADMAP.md)。
+新机器默认使用 **Ubuntu 26.10**。Ubuntu 22.04 建议用 SSH 隧道连接。支持周期和各系统的验证状态见[选择系统](docs/USER_GUIDE.md)。
 
 ## 安装
 
@@ -29,7 +29,7 @@ Ubuntu 22.04 / 24.04 / 26.04 / 26.10 或 Debian 12 / 13，amd64 或 arm64，syst
 curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash
 ```
 
-安装最新发布版本，默认 SSH 和桌面账户为 `agentdesk`。安装后按提示执行 `sudo passwd 用户名`，SSH 和 RDP 共用这个密码。
+安装最新发布版本，默认 SSH 和桌面账户为 `agentdesk`。安装后按提示执行 `sudo passwd 用户名`，SSH 和 RDP 共用这个密码；密码至少 10 位，包含小写、大写、数字、符号中的至少三类。
 
 参数写在 `bash -s --` 之后：
 
@@ -71,6 +71,7 @@ agentdesk rdp                        # 输出 macOS 可打开的 RDP 链接
 agentdesk verify                     # 检查软件包、SSH 和 RDP
 agentdesk install gemini kubectl     # 添加个人工具（Gemini CLI、Kubernetes CLI）
 agentdesk install apt:htop           # 添加 apt 系统软件包
+agentdesk outdated                   # 列出 upgrade 会更新的软件
 agentdesk upgrade                    # 升级个人软件
 agentdesk upgrade --system           # 升级全机共享的工具和应用（管理员）
 agentdesk run TASK                   # 运行个人 mise 配置中的任务

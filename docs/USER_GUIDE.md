@@ -12,14 +12,16 @@ README 之外的使用细节：安装、连接、桌面维护、软件管理、�
 
 新建桌面默认使用 Ubuntu 26.10。XFCE 和 xrdp 继续使用系统官方源，AgentDesk 不单独编译或升级它们。2026-11 官方源中的版本：
 
-| 系统 | XFCE | xrdp | 建议 |
-|---|---|---|---|
-| Ubuntu 26.10 | 4.20 | [0.10.6.1](https://packages.ubuntu.com/stonking/xrdp) | **默认** |
-| Ubuntu 26.04 LTS | 4.20 | 0.10.1 | 可用 |
-| Debian 13 | 4.20 | 0.10.1 | 可用 |
-| Ubuntu 24.04 LTS | 4.18 | 0.9.24 | 可用 |
-| Debian 12 | 4.18 | 0.9.21 | 可用 |
-| Ubuntu 22.04 LTS | 4.16 | 0.9.17 | 能用，不推荐 |
+| 系统 | XFCE | xrdp | 建议 | 验证状态 |
+|---|---|---|---|---|
+| Ubuntu 26.10 | 4.20 | [0.10.6.1](https://packages.ubuntu.com/stonking/xrdp) | **默认** | 待验收 |
+| Ubuntu 26.04 LTS | 4.20 | 0.10.1 | 可用 | E2E 通过；AWS 自动验收 |
+| Debian 13 | 4.20 | 0.10.1 | 可用 | 未验证 |
+| Ubuntu 24.04 LTS | 4.18 | 0.9.24 | 可用 | 未验证 |
+| Debian 12 | 4.18 | 0.9.21 | 可用 | 未验证 |
+| Ubuntu 22.04 LTS | 4.16 | 0.9.17 | 能用，不推荐 | 未验证 |
+
+验证状态：E2E 指 [Docker E2E](TESTING_GUIDE.md#docker-e2etestse2esh)，真机验收见 [ROADMAP](ROADMAP.md) 的待验收项；“未验证”的系统允许安装，但没有跑过完整流程。
 
 - Ubuntu 26.10 是非 LTS 正式版，[官方支持到 2027 年 7 月](https://ubuntu.com/about/release-cycle)，需在支持结束前升级系统；AgentDesk 不执行操作系统升级。安装与 GUI 验收进度见 [ROADMAP](ROADMAP.md)。
 - amd64 和 arm64（如 AWS Graviton）都支持。
@@ -72,11 +74,12 @@ agentdesk upgrade --system --proxy http://127.0.0.1:7890
 
 - SSH 和桌面共用账户与密码，默认 `agentdesk`，可用 `--user NAME` 指定。
 - 安装器保留已有密码；没有密码时，安装后手动执行 `sudo passwd USER`。只为该账户启用 SSH 密码认证，保留原管理账户的登录方式。
+- 密码规则（系统自带的 pam_pwquality）：至少 10 位，包含小写、大写、数字、符号中的至少三类。该账户能 sudo，而 SSH 与 RDP 都接受密码登录，所以规则对 `sudo passwd` 同样强制。规则全机生效，只约束之后设置的密码；已有的弱密码请重新设置。
 - 装完重新登录 SSH 或 RDP；当前终端要立即生效可执行 `. /etc/profile.d/agentdesk.sh`。
 
 ## 3. 连接
 
-- `agentdesk info` 打印账户、地址和当前模式的连接命令；init 结束时也会打印，普通用户可运行。
+- `agentdesk info` 打印账户、地址、RDP 证书指纹和当前模式的连接命令；init 结束时也会打印，普通用户可运行。xrdp 默认用自签证书，首次连接时客户端会提示，核对指纹一致后再信任。
 - 公网地址从 AWS、阿里云实例元数据读取；读取失败时提示手动查找地址，不输出带占位符的命令。
 - macOS 执行 `info` 给出的 `open 'rdp://…'` 命令；Windows 用 `mstsc /v:地址`。`agentdesk rdp` 只输出链接，也可在 Mac 上运行 `open "$(ssh 用户@服务器 agentdesk rdp)"`。隧道模式使用 `127.0.0.1:13389`；直连且取不到公网地址时报错退出。
 - **直连**：RDP 连 `服务器:端口`，会话选 Xorg；先在安全组或防火墙中只放行你的 IP。
@@ -89,10 +92,12 @@ agentdesk upgrade --system --proxy http://127.0.0.1:7890
 ## 4. 桌面维护
 
 命令默认使用 `agentdesk.yaml` 中保存的用户和参数。
-`verify` 检查本机 SSH/RDP 服务、监听、账户密码和 SSH 认证配置；外部登录仍需实测。
+`verify` 检查软件包、共享工具、本机 SSH/RDP 服务与监听、账户密码、密码规则和 SSH 认证配置；外部登录仍需实测。自动安全更新未启用时给出 `[WARN]` 和启用命令，不算失败。
+
+init 的进度和错误同时写入 `/var/log/agentdesk/init-时间戳.log`（仅 root 可读，保留最近 5 份），失败时会提示日志路径。
 
 ```bash
-agentdesk verify                   # [PASS]/[FAIL] 输出到 stdout
+agentdesk verify                   # [PASS]/[FAIL]/[WARN] 输出到 stdout
 agentdesk init --theme none        # 重新执行；换主题或语言也用它，个人设置保留
 agentdesk desktop-reset --force    # 先退出该用户的全部图形会话
 ```
@@ -115,8 +120,10 @@ agentdesk desktop-reset --force    # 先退出该用户的全部图形会话
 ```bash
 agentdesk install gemini kubectl apt:htop     # 记录到个人清单并安装
 agentdesk install                             # 按个人清单补齐
+agentdesk outdated                            # 列出 upgrade 会更新的个人工具
 agentdesk upgrade                             # 在版本范围内升级个人软件
 agentdesk install --system kubectl apt:tree   # 管理员：写入 /etc/mise/config.local.toml 并安装
+agentdesk outdated --system                   # 管理员：列出可升级的共享工具
 agentdesk upgrade --system                    # 管理员：升级全机共享的工具和应用
 ```
 
@@ -128,7 +135,7 @@ agentdesk upgrade --system                    # 管理员：升级全机共享�
 
 - 三份清单由 mise 原生合并；示例见 [mise.example.toml](../mise.example.toml)，语法见 [mise configuration](https://mise.jdx.dev/configuration.html)。
 - `apt:` 写在个人清单里只是记录需求，软件仍装在全机，需要 sudo 的步骤由 mise 提权。
-- `upgrade` 不接受软件名；单独升级用原生命令（`mise lock --bump NAME` 再 `mise install --locked`）。`node = "26"` 保持在 26.x，`latest` 可能跨大版本。
+- `outdated` 只列 mise 工具，不含 apt 包。`upgrade` 和 `outdated` 不接受软件名；单独升级用原生命令（`mise lock --bump NAME` 再 `mise install --locked`）。`node = "26"` 保持在 26.x，`latest` 可能跨大版本。
 - 需要额外部署步骤的软件，在个人清单里写 `[tasks]`，用 `agentdesk run TASK` 执行。
 - 软件命令固定在 `/` 下执行，不读当前项目的 `mise.toml`；项目里的版本按 mise 原生规则切换。
 - 已知限制：mise 2026.10.17 在个人清单覆盖全机预装工具的版本时（如个人写 `node = "22"`），会去改共享目录的链接并报 `runtime symlink repair(s) failed`。需要别的版本时写在项目的 `mise.toml` 里，或由管理员写进 `config.local.toml`。
@@ -149,7 +156,7 @@ agentdesk update --ref main    # 跟随开发分支，或 --ref vX.Y.Z 指定版
 agentdesk update --dry-run     # 只打印计划
 ```
 
-- `update` 只替换程序和随附资源，不应用主机配置、不安装或升级软件。需要应用新配置时运行 `sudo agentdesk init`（也会更新系统 mise）；升级软件用 `agentdesk upgrade` 或 `sudo agentdesk upgrade --system`。
+- `update` 只替换程序和随附资源：先完整下载、复制到临时目录，再整体替换程序目录，不保留旧版本；中途失败时原程序不变。它不应用主机配置、不安装或升级软件。需要应用新配置时运行 `sudo agentdesk init`（也会更新系统 mise）；升级软件用 `agentdesk upgrade` 或 `sudo agentdesk upgrade --system`。
 - 已是最新时只提示；显式 `--ref` 时总是更新。不支持只更新程序的旧目标版本会被拒绝。
 
 旧版 `update` 会重跑 init。首次切换到独立更新，用新版入口：

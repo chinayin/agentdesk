@@ -164,6 +164,28 @@ elif os.getenv('FAIL_LOCKED_INSTALL') and 'install' in sys.argv and '--locked' i
         self.assertNotIn('--path /etc/mise/config.toml', result.stderr)
         self.assertEqual(self.calls(), [])
 
+    def test_outdated_uses_upgrade_scope_and_takes_no_names(self):
+        result = self.invoke('outdated')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        call = self.calls()[-1]
+        self.assertEqual(call['args'], ['-C', '/', 'outdated'])
+        self.assertEqual(call['ignored'], '/etc/mise')
+        result = self.invoke('outdated', 'ruff')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('outdated takes no names', result.stderr)
+        result = self.invoke('outdated', '--system', '--dry-run')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('/usr/bin/mise -C / outdated', result.stderr)
+        self.assertEqual(len(self.calls()), 2)
+
+    def test_system_failure_keeps_mise_exit_code(self):
+        # --system 失败后仍修正共享文件权限，但不能吞掉 mise 的退出码。
+        result = subprocess.run(['bash', '-c', 'source "$1/agentdesk.sh"; software_shared_permissions() { :; }; '
+                                 'system_mise() { return 44; }; SOFTWARE_SYSTEM=1; DRY_RUN=0; '
+                                 'software_mise install --locked || echo "status $?"', '_', str(ROOT)],
+                                env=self.env, text=True, capture_output=True)
+        self.assertEqual(result.stdout, 'status 44\n', result.stderr)
+
     def test_system_environment_preserves_network_proxy_but_not_user_mise_settings(self):
         probe = self.bin / 'probe'
         # 不能设 MISE_SYSTEM_CONFIG_FILE：它会让 mise 只读 config.toml，忽略 config.local.toml。
@@ -174,7 +196,7 @@ elif os.getenv('FAIL_LOCKED_INSTALL') and 'install' in sys.argv and '--locked' i
         result = subprocess.run(['bash', '-c',
             'source "$1/agentdesk.sh"; '
             'software_shared_permissions() { :; }; '
-            'SOFTWARE_SYSTEM=1; SOFTWARE_MISE="$2"; software_mise version',
+            'SOFTWARE_SYSTEM=1; SYSTEM_MISE="$2"; software_mise version',
             '_', str(ROOT), str(probe)], env=env, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), ['http://proxy.example:3128',
