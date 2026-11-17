@@ -10,13 +10,13 @@ README 之外的使用细节：安装、连接、桌面维护、软件管理、�
 
 ### 选择系统
 
-新建桌面默认使用 Ubuntu 26.10。XFCE 和 xrdp 继续使用系统官方源，AgentDesk 不单独编译或升级它们。2026-11 官方源中的版本：
+新建桌面默认使用 Ubuntu 26.10；AWS 上 `agentdesk-create` 默认用 Lightsail，它没有 Ubuntu 26.x 镜像，因此用 Debian 13（取舍见 [skill](../skills/agentdesk-create/SKILL.md)）。XFCE 和 xrdp 继续使用系统官方源，AgentDesk 不单独编译或升级它们。2026-11 官方源中的版本：
 
 | 系统 | XFCE | xrdp | 建议 | 验证状态 |
 |---|---|---|---|---|
 | Ubuntu 26.10 | 4.20 | [0.10.6.1](https://packages.ubuntu.com/stonking/xrdp) | **默认** | 待验收 |
 | Ubuntu 26.04 LTS | 4.20 | 0.10.1 | 可用 | E2E 通过；AWS 自动验收 |
-| Debian 13 | 4.20 | 0.10.1 | 可用 | 未验证 |
+| Debian 13 | 4.20 | 0.10.1 | 可用；Lightsail 默认 | E2E 通过 |
 | Ubuntu 24.04 LTS | 4.18 | 0.9.24 | 可用 | 未验证 |
 | Debian 12 | 4.18 | 0.9.21 | 可用 | 未验证 |
 | Ubuntu 22.04 LTS | 4.16 | 0.9.17 | 能用，不推荐 | 未验证 |

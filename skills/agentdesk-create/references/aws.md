@@ -1,4 +1,6 @@
-# AWS Native CLI Flow
+# AWS EC2 Native CLI Flow
+
+Use EC2 only for the cases listed in the skill; the default AWS flow is [Lightsail](lightsail.md).
 
 Use `aws` and pass `--profile "$PROFILE" --region "$REGION" --no-cli-pager` on every command. The variables below come from the user's parameters or API queries; do not assume a personal environment.
 
@@ -12,8 +14,8 @@ Use `aws` and pass `--profile "$PROFILE" --region "$REGION" --no-cli-pager` on e
 8. Poll `describe-instance-status --include-all-instances` and `describe-instances`; record the instance ID, address and state. Get the host key fingerprints printed by cloud-init with `get-console-output --instance-id "$INSTANCE_ID" --latest`, compare them with `ssh-keyscan`, then connect.
 9. Deploy and verify following the main skill flow; keep the native create/query responses and the result record.
 
-The template uses standard CPU credits to avoid T3 unlimited surplus charges; the instance, disk and public IPv4 are still billed. Do not create a NAT gateway, load balancer or Elastic IP that the test does not need.
+The template uses standard CPU credits to avoid T3 unlimited surplus charges; the instance, disk and public IPv4 are still billed. For a desktop that will be kept, allocate an Elastic IP and associate it with the instance so the address survives stop/start; it is billed like the automatic public IPv4 (also while the instance is stopped), and is released only on cleanup. Do not create a NAT gateway or load balancer.
 
-Delete resources only when the user authorizes it: `terminate-instances` by the recorded ID, confirm termination and the DeleteOnTermination disk deletion, then delete this run's dedicated security group. State clearly when cleanup is incomplete. Never delete shared networks or key pairs.
+Delete resources only when the user authorizes it: `terminate-instances` by the recorded ID, confirm termination and the DeleteOnTermination disk deletion, then release this run's Elastic IP if any, and delete this run's dedicated security group. State clearly when cleanup is incomplete. Never delete shared networks or key pairs.
 
 References: [RunInstances](https://docs.aws.amazon.com/cli/latest/reference/ec2/run-instances.html), [finding Ubuntu images](https://ubuntu.com/aws/docs/aws-how-to/instances/find-ubuntu-images/), [installing the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).

@@ -19,7 +19,7 @@ Turn a fresh Ubuntu/Debian cloud server into a ready-to-use remote desktop for A
 
 Ubuntu 22.04 / 24.04 / 26.04 / 26.10 or Debian 12 / 13, amd64 or arm64, systemd, root or a sudo user.
 
-For new servers use **Ubuntu 26.10**. Use an SSH tunnel on Ubuntu 22.04. See [choosing a system](docs/USER_GUIDE.md) for the support period and which systems have been verified.
+For new servers use **Ubuntu 26.10** (Debian 13 on AWS Lightsail, which has no 26.x image). Use an SSH tunnel on Ubuntu 22.04. See [choosing a system](docs/USER_GUIDE.md) for the support period and which systems have been verified.
 
 ## Install
 
@@ -103,7 +103,7 @@ Documents are written in Chinese.
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | Design, file layout, software scopes, permissions |
 | [TESTING_GUIDE](docs/TESTING_GUIDE.md) | Offline tests, Docker E2E, real-machine checks |
 | [ROADMAP](docs/ROADMAP.md) | Open items with acceptance criteria |
-| [agentdesk-create skill](skills/agentdesk-create/SKILL.md) | Create and verify a cloud desktop on AWS / Alibaba Cloud |
+| [agentdesk-create skill](skills/agentdesk-create/SKILL.md) | Create and verify a cloud desktop on AWS (Lightsail by default, or EC2) / Alibaba Cloud |
 
 ## Development
 

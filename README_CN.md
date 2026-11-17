@@ -19,7 +19,7 @@
 
 Ubuntu 22.04 / 24.04 / 26.04 / 26.10 或 Debian 12 / 13，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。
 
-新机器默认使用 **Ubuntu 26.10**。Ubuntu 22.04 建议用 SSH 隧道连接。支持周期和各系统的验证状态见[选择系统](docs/USER_GUIDE.md)。
+新机器默认使用 **Ubuntu 26.10**（AWS Lightsail 没有 26.x 镜像，用 Debian 13）。Ubuntu 22.04 建议用 SSH 隧道连接。支持周期和各系统的验证状态见[选择系统](docs/USER_GUIDE.md)。
 
 ## 安装
 
@@ -101,7 +101,7 @@ agentdesk --help
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | 设计、文件布局、软件作用域、权限 |
 | [TESTING_GUIDE](docs/TESTING_GUIDE.md) | 离线测试、Docker E2E、真机验收 |
 | [ROADMAP](docs/ROADMAP.md) | 未完成事项及验收标准 |
-| [agentdesk-create skill](skills/agentdesk-create/SKILL.md) | 在 AWS / 阿里云创建并验收云桌面 |
+| [agentdesk-create skill](skills/agentdesk-create/SKILL.md) | 在 AWS（默认 Lightsail，或 EC2）/ 阿里云创建并验收云桌面 |
 
 ## 开发
 
