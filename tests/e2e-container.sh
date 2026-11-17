@@ -52,7 +52,7 @@ verify() {
 }
 case "${1:-}" in
   install)
-    bash "$ROOT/install.sh" --user desk --theme none --rdp-mode tunnel
+    bash "$ROOT/install.sh" --user desk --rdp-mode tunnel
     ls /var/log/agentdesk/init-*.log
     # 密码规则对 root 同样强制：弱密码被拒绝。
     if echo 'desk:abcdefghij' | chpasswd 2>/dev/null; then

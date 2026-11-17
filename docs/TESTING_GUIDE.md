@@ -56,7 +56,7 @@ bash tests/e2e.sh --dry-run           # 只打印计划
 
 - 容器不挂载宿主目录或 Docker socket，不开放端口，不读取任何凭据。`--proxy` 只进入镜像构建参数和容器环境。
 - Apple Silicon 上用默认的 arm64；amd64 的 systemd 在模拟环境中会崩溃，入口检测到后以退出码 2 结束。
-- 不覆盖：install.sh 的远程下载（由离线测试的假 curl 覆盖）、WhiteSur 主题下载（用 `--theme none`）、真实 RDP 登录、输入法与剪贴板、账号登录。其他系统按需用 `--image` 运行，不预先建矩阵。
+- 不覆盖：install.sh 的远程下载（由离线测试的假 curl 覆盖）、真实 RDP 登录、输入法与剪贴板、账号登录。其他系统按需用 `--image` 运行，不预先建矩阵。
 
 ## 真机验收
 
