@@ -17,9 +17,9 @@
 
 ## 环境要求
 
-Ubuntu 22.04 / 24.04 / 26.04 / 26.10 或 Debian 12 / 13，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。
+**Debian 13**（推荐）或 Ubuntu 26.10，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。
 
-新机器默认使用 **Ubuntu 26.10**（AWS Lightsail 没有 26.x 镜像，用 Debian 13）。Ubuntu 22.04 建议用 SSH 隧道连接。支持周期和各系统的验证状态见[选择系统](docs/USER_GUIDE.md)。
+推荐 Debian 13 的原因、支持周期和验证状态见[选择系统](docs/USER_GUIDE.md)。其他 Debian/Ubuntu 版本会警告后继续安装，未经验证。
 
 ## 安装
 
@@ -108,7 +108,7 @@ agentdesk --help
 ```bash
 sudo bash install.sh  # 在源码目录内安装
 bash test.sh          # 离线测试，约 10 秒
-bash tests/e2e.sh     # 在 Docker 中做安装测试（默认 Ubuntu 26.10、本机架构）
+bash tests/e2e.sh     # 在 Docker 中做安装测试（默认 Debian 13、本机架构）
 ```
 
 ## 许可

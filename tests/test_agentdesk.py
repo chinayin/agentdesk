@@ -142,12 +142,12 @@ class HostTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             release = Path(tmp) / "os-release"
             for system, like, version, arch, status, warned in [
+                ("debian", "", "13", "amd64", 0, False), ("debian", "", "13", "arm64", 0, False),
                 ("ubuntu", "debian", "26.10", "amd64", 0, False), ("ubuntu", "debian", "26.10", "arm64", 0, False),
-                ("ubuntu", "debian", "26.04", "amd64", 0, False), ("ubuntu", "debian", "24.04", "arm64", 0, False),
-                ("ubuntu", "debian", "22.04", "amd64", 0, False), ("debian", "", "13", "arm64", 0, False),
-                ("debian", "", "12", "amd64", 0, False),
-                # 新版本与衍生版警告后继续；旧版本、非 Debian 系与其他架构拒绝。
-                ("debian", "", "14", "amd64", 0, True), ("linuxmint", "ubuntu debian", "22", "amd64", 0, True),
+                # 其他 Debian 系（含较早的 LTS）警告后继续，由用户自行验证；更旧的版本、非 Debian 系与其他架构拒绝。
+                ("ubuntu", "debian", "26.04", "amd64", 0, True), ("ubuntu", "debian", "22.04", "amd64", 0, True),
+                ("debian", "", "12", "amd64", 0, True), ("debian", "", "14", "amd64", 0, True),
+                ("linuxmint", "ubuntu debian", "22", "amd64", 0, True),
                 ("ubuntu", "debian", "20.04", "amd64", 2, False), ("debian", "", "11", "amd64", 2, False),
                 ("fedora", "", "43", "amd64", 2, False), ("ubuntu", "debian", "26.10", "armhf", 2, False),
             ]:
@@ -155,6 +155,38 @@ class HostTests(unittest.TestCase):
                 result = self.function('detect_platform "$1" "$2"', release, arch)
                 self.assertEqual(result.returncode, status, (system, version, arch, result.stderr))
                 self.assertEqual("Warning: untested OS" in result.stderr, warned, result.stderr)
+
+    def test_debian_13_takes_only_xrdp_from_backports(self):
+        for release, from_backports in [("debian:13", True), ("ubuntu:26.10", False), ("debian:12", False)]:
+            with self.subTest(release=release):
+                result = self.function(f'DRY_RUN=1; OS_RELEASE={release}; install_packages')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                main_install = next(line for line in result.stderr.splitlines() if "--no-upgrade" in line)
+                self.assertEqual(" xrdp " in main_install, not from_backports)
+                self.assertEqual("xrdp/trixie-backports xorgxrdp/trixie-backports" in result.stderr, from_backports)
+                self.assertEqual("enable trixie-backports" in result.stderr, from_backports)
+
+    def test_backports_source_is_added_only_when_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "agentdesk-backports.sources"
+            script = ('DRY_RUN=0; BACKPORTS_SOURCE="$1"; run() { echo "ran $*" >&2; }; '
+                      'apt-cache() { printf "%s\\n" "$POLICY"; }; enable_backports')
+            configured = " 100 mirror+file:/etc/apt/mirrors/debian.list trixie-backports/main amd64 Packages"
+            result = subprocess.run(["bash", "-c", 'source "$1"; shift; ' + NO_SETTINGS + script, "_",
+                                     str(ROOT / "agentdesk.sh"), str(source)],
+                                    env={**os.environ, "POLICY": configured}, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(source.exists())
+            self.assertNotIn("apt-get update", result.stderr)
+            result = subprocess.run(["bash", "-c", 'source "$1"; shift; ' + NO_SETTINGS + script, "_",
+                                     str(ROOT / "agentdesk.sh"), str(source)],
+                                    env={**os.environ, "POLICY": " 500 http://deb.debian.org/debian trixie/main"},
+                                    text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Suites: trixie-backports\n", source.read_text())
+            self.assertIn("Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg", source.read_text())
+            self.assertEqual(source.stat().st_mode & 0o777, 0o644)
+            self.assertIn("ran env DEBIAN_FRONTEND=noninteractive apt-get update", result.stderr)
 
     def test_os_release_does_not_override_agentdesk_version(self):
         with tempfile.TemporaryDirectory() as tmp:

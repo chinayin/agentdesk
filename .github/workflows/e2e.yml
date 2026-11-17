@@ -8,7 +8,7 @@ on:
     inputs:
       image:
         description: Base image
-        default: ubuntu:26.10
+        default: debian:13
 
 permissions:
   contents: read

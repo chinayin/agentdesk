@@ -6,7 +6,7 @@
 
 AgentDesk 是一个 Bash CLI，把 Ubuntu/Debian 云主机初始化为 XFCE/xrdp 远程桌面。`agentdesk.sh` 负责系统、账户、桌面和程序安装；软件全部交给原生 mise；云主机由 `agentdesk-create` skill 调用云厂商原生 CLI 创建。不引入自定义配置格式、插件框架、软件别名表或状态数据库。
 
-支持 Ubuntu 22.04/24.04/26.04/26.10、Debian 12/13，amd64 与 arm64，E2E 默认使用 Ubuntu 26.10，新建桌面的系统选择见 [USER_GUIDE](USER_GUIDE.md#选择系统)；验收进度见 [ROADMAP](ROADMAP.md)。其他 Debian 系（新版本或衍生版）警告后继续；更早的版本、非 Debian 系和其他架构直接拒绝。架构差异交给 apt 和 mise 按本机架构选包。
+声明支持 Debian 13（推荐）和 Ubuntu 26.10，amd64 与 arm64，E2E 默认使用 Debian 13；系统选择与验证状态见 [USER_GUIDE](USER_GUIDE.md#选择系统)。其他 Debian 系警告后继续，由用户自行验证；更早的版本、非 Debian 系和其他架构直接拒绝。架构差异交给 apt 和 mise 按本机架构选包。
 
 ## 1. 组成
 
@@ -31,7 +31,7 @@ flowchart TD
     C --> P["参数：命令行 > /etc/agentdesk/agentdesk.yaml > 默认值；检查系统，非 root 时经 sudo 重新执行"]
     P --> L["进度与错误同时写入 /var/log/agentdesk/init-时间戳.log"]
     L --> M["首次安装临时 mask xrdp，监听配置写好前不对外开放"]
-    M --> K["apt 安装基础包、XFCE、xrdp、字体、输入法、pwquality（不做全机升级）"]
+    M --> K["apt 安装基础包、XFCE、xrdp、字体、输入法、pwquality（不做全机升级）；Debian 13 的 xrdp/xorgxrdp 取自 trixie-backports"]
     K --> Q["写入全机密码规则"]
     Q --> U["创建或复用 SSH/桌面账户；启用该账户的 SSH 密码认证，密码由用户手动设置"]
     U --> G["生成 en_US、zh_CN locale"]
@@ -108,6 +108,7 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 
 ## 6. 远程连接
 
+- Debian 13 的 xrdp/xorgxrdp 来自官方 trixie-backports（0.10.6.1，带 H.264，与 Ubuntu 26.10 同代）：系统未配置该源时写入 `/etc/apt/sources.list.d/agentdesk-backports.sources`，只这两个包指定 backports，依赖仍来自 stable。backports 不受 Debian 安全团队覆盖，所以 init 对它们例外地升级到最新版（会重启 xrdp），其余包仍只补缺。
 - `direct`（默认）监听 `0.0.0.0:PORT`，由用户在安全组或防火墙中限制来源 IP；`tunnel` 只监听 `127.0.0.1`，经 SSH 端口转发访问。
 - `verify` 检查软件包（含 Chrome、VS Code）、共享清单中的 mise 工具是否装齐、SSH 服务或 socket 及 `sshd -T` 中全部端口的监听、工作账户的有效认证配置、密码状态和密码规则，以及 xrdp 服务与 `xrdp.ini` 的实际监听；`[PASS]/[FAIL]` 输出到 stdout，外部 SSH/RDP 登录仍需实测。自动安全更新（unattended-upgrades）未启用时输出 `[WARN]` 和启用命令，不计入失败：AgentDesk 不做全机升级，xrdp 等对外服务的补丁依赖它。
 - SSH 用 `00-agentdesk.conf` 中的 `Match User` 只为工作账户启用密码认证、禁止空密码；切换 `--user` 会替换旧规则。要求主配置在首个 `Match` 前全局 Include 受管文件或 `sshd_config.d/*.conf`，写入后先检查语法和有效配置，再 reload，失败恢复原文件。其他账户的认证配置保留。

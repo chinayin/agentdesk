@@ -17,9 +17,9 @@ Turn a fresh Ubuntu/Debian cloud server into a ready-to-use remote desktop for A
 
 ## Requirements
 
-Ubuntu 22.04 / 24.04 / 26.04 / 26.10 or Debian 12 / 13, amd64 or arm64, systemd, root or a sudo user.
+**Debian 13** (recommended) or Ubuntu 26.10, amd64 or arm64, systemd, root or a sudo user.
 
-For new servers use **Ubuntu 26.10** (Debian 13 on AWS Lightsail, which has no 26.x image). Use an SSH tunnel on Ubuntu 22.04. See [choosing a system](docs/USER_GUIDE.md) for the support period and which systems have been verified.
+See [choosing a system](docs/USER_GUIDE.md) for why Debian 13 is recommended, support periods and verification status. Other Debian/Ubuntu releases install with a warning and are unverified.
 
 ## Install
 
@@ -110,7 +110,7 @@ Documents are written in Chinese.
 ```bash
 sudo bash install.sh  # install from a source checkout
 bash test.sh          # offline tests, about 10 seconds
-bash tests/e2e.sh     # Docker install test (default: Ubuntu 26.10, native architecture)
+bash tests/e2e.sh     # Docker install test (default: Debian 13, native architecture)
 ```
 
 ## License

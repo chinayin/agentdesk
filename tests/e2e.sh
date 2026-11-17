@@ -5,14 +5,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 KEEP=0
 DRY_RUN=0
 PROXY="${AGENTDESK_E2E_PROXY:-}"
-BASE=ubuntu:26.10
+BASE=debian:13
 ARCH=""
 usage() {
   cat <<'EOF'
 Usage: bash tests/e2e.sh [--image IMAGE] [--arch amd64|arm64] [--proxy URL] [--keep] [--dry-run]
 Run installation, repeat/update, restart and GUI smoke tests in a systemd container.
 Requires a local Docker daemon supporting privileged systemd containers.
---image IMAGE Base image, e.g. debian:13 or ubuntu:26.10 (default: ubuntu:26.10).
+--image IMAGE Base image, e.g. debian:13 or ubuntu:26.10 (default: debian:13).
 --arch ARCH   amd64 or arm64 (default: the Docker daemon's architecture).
 --proxy URL HTTP(S) proxy reachable from the container; loopback stays direct.
             AGENTDESK_E2E_PROXY sets the same; the flag takes precedence.

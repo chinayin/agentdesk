@@ -211,7 +211,10 @@ run() {
   fi
 }
 
-# 声明支持的版本直接通过；更早的版本缺少依赖，拒绝；其他 Debian 系（新版本、衍生版）警告后继续。
+# 只声明支持 Debian 13 与 Ubuntu 26.10；更早的版本缺少依赖，拒绝；其他 Debian 系警告后继续，由用户自行验证。
+# 结果记入 OS_RELEASE（如 debian:13），供安装软件包时区分系统。
+OS_RELEASE=""
+
 detect_platform() {
   local release="$1" arch="$2" ID ID_LIKE VERSION_ID
   [ -r "$release" ] || missing "cannot read os-release"
@@ -219,13 +222,14 @@ detect_platform() {
   # shellcheck disable=SC1090
   IFS='|' read -r ID VERSION_ID ID_LIKE < <(. "$release"; printf '%s|%s|%s\n' "${ID:-}" "${VERSION_ID:-}" "${ID_LIKE:-}")
   case "$arch" in amd64|arm64) ;; *) missing "unsupported architecture: $arch (amd64 or arm64 required)" ;; esac
-  case "$ID:$VERSION_ID" in
-    ubuntu:22.04|ubuntu:24.04|ubuntu:26.04|ubuntu:26.10|debian:12|debian:13) ;;
+  OS_RELEASE="$ID:$VERSION_ID"
+  case "$OS_RELEASE" in
+    debian:13|ubuntu:26.10) ;;
     ubuntu:1*|ubuntu:20.*|ubuntu:21.*|debian:[0-9]|debian:1[01])
       missing "unsupported OS: $ID $VERSION_ID (Ubuntu 22.04+ or Debian 12+ required)" ;;
     *)
       case " $ID $ID_LIKE " in
-        *" debian "*|*" ubuntu "*) warn "untested OS: $ID $VERSION_ID; supported: Ubuntu 22.04/24.04/26.04/26.10, Debian 12/13" ;;
+        *" debian "*|*" ubuntu "*) warn "untested OS: $ID $VERSION_ID; supported: Debian 13, Ubuntu 26.10; verify this system yourself" ;;
         *) missing "unsupported OS: $ID $VERSION_ID (Debian or Ubuntu family required)" ;;
       esac ;;
   esac
@@ -317,21 +321,55 @@ render_xrdp() {
   ' "$input" > "$output"
 }
 
+# Debian 13 的 xrdp/xorgxrdp 取自官方 trixie-backports（与 Ubuntu 26.10 同代，带 H.264），依赖仍来自
+# stable。backports 不在 Debian 安全团队范围内，所以每次 init 都升到 backports 的最新版。
+BACKPORTS_SOURCE=/etc/apt/sources.list.d/agentdesk-backports.sources
+
+# 系统未配置 trixie-backports 时才添加（云镜像通常已有，重复配置会让 apt 报错）。
+enable_backports() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dry-run: enable trixie-backports in $BACKPORTS_SOURCE unless already configured"
+    return
+  fi
+  if apt-cache policy | grep -q ' trixie-backports/main '; then return; fi
+  cat > "$BACKPORTS_SOURCE" <<'SOURCE'
+Types: deb
+URIs: http://deb.debian.org/debian
+Suites: trixie-backports
+Components: main
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+SOURCE
+  chmod 0644 "$BACKPORTS_SOURCE"
+  info "Enabled Debian trixie-backports: $BACKPORTS_SOURCE"
+  run env DEBIAN_FRONTEND=noninteractive apt-get update
+}
+
 install_packages() {
+  local rdp=(xrdp xorgxrdp)
   info "Installing system packages without a full-system upgrade"
   run env DEBIAN_FRONTEND=noninteractive apt-get update
+  if [ "$OS_RELEASE" = debian:13 ]; then
+    enable_backports
+    rdp=()
+  fi
   run env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install \
-    -y --no-install-recommends --no-upgrade \
+    -y --no-install-recommends --no-upgrade ${rdp[@]+"${rdp[@]}"} \
     ca-certificates curl wget git gnupg sudo unzip tar gzip xz-utils bzip2 zstd \
     python3 python3-venv build-essential openssh-client openssh-server rsync file sed gawk \
     gettext-base tzdata less procps iproute2 locales fontconfig \
     xfce4 xfce4-terminal xfce4-whiskermenu-plugin xfce4-notifyd gvfs \
-    xrdp xorgxrdp dbus-x11 dbus-user-session x11-xserver-utils \
+    dbus-x11 dbus-user-session x11-xserver-utils \
     polkitd pkexec ssl-cert librsvg2-common adwaita-icon-theme greybird-gtk-theme \
     fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core \
     fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 \
     im-config sassc libglib2.0-dev-bin libxml2-utils gnome-themes-extra extrepo \
     libpam-pwquality cracklib-runtime
+  if [ "$OS_RELEASE" = debian:13 ]; then
+    # 已装 stable 版本时会升级，xrdp 随之重启并断开当前桌面会话。
+    info "Installing xrdp and xorgxrdp from trixie-backports"
+    run env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install -y --no-install-recommends \
+      xrdp/trixie-backports xorgxrdp/trixie-backports
+  fi
 }
 
 # mise 来自官方 apt 源（经 extrepo 启用，带签名校验）。
