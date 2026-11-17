@@ -891,8 +891,10 @@ class AwkCompatibilityTests(unittest.TestCase):
     )
 
     def test_parsers_agree_across_awk_implementations(self):
-        # 未安装的实现跳过；Debian/Ubuntu 默认带 mawk。
         candidates = {name: shutil.which(name) for name in ["mawk", "gawk", "awk"]}
+        if os.environ.get("CI"):
+            # CI 安装了 mawk 和 gawk，缺失时不能悄悄跳过；本地未安装的实现跳过。
+            self.assertTrue(candidates["mawk"] and candidates["gawk"], candidates)
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             (base / "settings.yaml").write_text(

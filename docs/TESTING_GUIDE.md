@@ -4,7 +4,7 @@
 
 ## 概述
 
-测试分三层，逐层更慢、更接近真实环境，每层只覆盖下一层做不到或太慢的部分。前两层也在 GitHub Actions 上运行：`test.yml` 在每次推送和 PR 时跑离线测试；`e2e.yml` 手动触发，在 `ubuntu-26.04`（amd64）和 `ubuntu-26.04-arm`（arm64）运行主机上，各测试一个默认基于 `ubuntu:26.10` 的容器；运行主机版本不决定容器系统版本。日志和截图作为 artifact 上传。
+测试分三层，逐层更慢、更接近真实环境，每层只覆盖下一层做不到或太慢的部分。前两层也在 GitHub Actions 上运行：`test.yml` 在每次推送和 PR 时跑离线测试（额外安装 mawk 和 gawk）；`e2e.yml` 手动触发，在 `ubuntu-26.04`（amd64）和 `ubuntu-26.04-arm`（arm64）运行主机上，各测试一个默认基于 `ubuntu:26.10` 的容器；运行主机版本不决定容器系统版本，所以任务名显示被测镜像和架构（如 `ubuntu:26.10 amd64`）。日志和截图作为 artifact 上传。
 
 | 层 | 入口 | 耗时 | 证明什么 |
 |---|---|---|---|
@@ -23,7 +23,7 @@
 
 | 文件 | 覆盖 |
 |---|---|
-| `tests/test_agentdesk.py` | 主脚本：参数与帮助、系统与架构判断、桌面默认值与模板、登录环境、desktop-reset、设置文件、`verify`、密码规则、init 日志、`info`/`rdp` 与证书指纹、自我更新与程序整体替换、install.sh、代理；已安装的 mawk、gawk 与系统 awk 解析一致；USER_GUIDE 参数表与 `--help` 一致；install.sh 与 agentdesk.sh 的重复函数一致 |
+| `tests/test_agentdesk.py` | 主脚本：参数与帮助、系统与架构判断、桌面默认值与模板、登录环境、desktop-reset、设置文件、`verify`、密码规则、init 日志、`info`/`rdp` 与证书指纹、自我更新与程序整体替换、install.sh、代理；mawk、gawk 与系统 awk 解析一致（CI 中缺少 mawk 或 gawk 即失败，本地跳过未安装的）；USER_GUIDE 参数表与 `--help` 一致；install.sh 与 agentdesk.sh 的重复函数一致 |
 | `tests/test_software.py` | 软件命令：个人与 `--system` 作用域、忽略系统清单的范围、参数拒绝、退出码透传、代理传递 |
 | `tests/test_mise_integration.py` | 真实 mise：配置写入与隔离、系统目录加载顺序、个人安装保留只读系统锁、任务输出；只用本地测试文件，不联网。需 `AGENTDESK_TEST_MISE="$(command -v mise)"`，版本基线见[架构说明](ARCHITECTURE.md#4-软件) |
 | `tests/test_ssh.py` | 新旧 sshd 输出格式、真实配置解析、工作账户隔离和失败恢复；不操作主机 SSH 服务 |
