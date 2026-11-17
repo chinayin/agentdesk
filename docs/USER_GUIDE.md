@@ -16,7 +16,7 @@ README 之外的使用细节：安装、连接、桌面维护、软件管理、�
 |---|---|---|---|---|
 | Ubuntu 26.10 | 4.20 | [0.10.6.1](https://packages.ubuntu.com/stonking/xrdp) | **默认** | 待验收 |
 | Ubuntu 26.04 LTS | 4.20 | 0.10.1 | 可用 | E2E 通过；AWS 自动验收 |
-| Debian 13 | 4.20 | 0.10.1 | 可用；Lightsail 默认 | E2E 通过 |
+| Debian 13 | 4.20 | 0.10.1 | 可用；Lightsail 默认 | E2E 通过；Lightsail 真机验收 |
 | Ubuntu 24.04 LTS | 4.18 | 0.9.24 | 可用 | 未验证 |
 | Debian 12 | 4.18 | 0.9.21 | 可用 | 未验证 |
 | Ubuntu 22.04 LTS | 4.16 | 0.9.17 | 能用，不推荐 | 未验证 |
