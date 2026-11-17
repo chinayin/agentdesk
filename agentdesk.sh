@@ -537,9 +537,9 @@ configure_rdp() (
     return
   fi
   local tmp base="$XRDP_INI"
-  # 升级 xrdp 时 dpkg 保留了改过的 xrdp.ini，新版默认配置在 .dpkg-new（如 runtime_user）：
+  # 升级 xrdp 时 dpkg 保留了改过的 xrdp.ini，新版默认配置在 .dpkg-dist（如 runtime_user）：
   # 以它为底重新应用监听设置，再删除它。
-  if [ -f "$XRDP_INI.dpkg-new" ]; then base="$XRDP_INI.dpkg-new"; fi
+  if [ -f "$XRDP_INI.dpkg-dist" ]; then base="$XRDP_INI.dpkg-dist"; fi
   # 同目录临时文件加 rename：写到一半失败时原文件不变。
   tmp="$(mktemp "$XRDP_INI.XXXXXX")"
   trap 'rm -f "$tmp"' EXIT

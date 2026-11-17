@@ -261,11 +261,11 @@ class HostTests(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["xrdp.ini"])
 
     def test_rdp_config_adopts_new_package_default_after_upgrade(self):
-        # dpkg 保留了改过的 xrdp.ini；新版默认值（如 runtime_user）在 .dpkg-new 中，必须采用。
+        # dpkg 保留了改过的 xrdp.ini；新版默认值（如 runtime_user）在 .dpkg-dist 中，必须采用。
         with tempfile.TemporaryDirectory() as tmp:
             ini = Path(tmp) / "xrdp.ini"
             ini.write_text("[Globals]\nport=tcp://127.0.0.1:3390\nmax_bpp=32\n")
-            Path(f"{ini}.dpkg-new").write_text("[Globals]\nport=3389\nruntime_user=xrdp\nmax_bpp=32\n")
+            Path(f"{ini}.dpkg-dist").write_text("[Globals]\nport=3389\nruntime_user=xrdp\nmax_bpp=32\n")
             result = self.function(self.RDP, ini)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(ini.read_text(),
