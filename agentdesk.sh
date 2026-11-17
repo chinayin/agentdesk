@@ -536,11 +536,14 @@ configure_rdp() (
     info "dry-run: configure xrdp mode=$RDP_MODE port=$RDP_PORT"
     return
   fi
-  local tmp
+  local tmp base="$XRDP_INI"
+  # 升级 xrdp 时 dpkg 保留了改过的 xrdp.ini，新版默认配置在 .dpkg-new（如 runtime_user）：
+  # 以它为底重新应用监听设置，再删除它。
+  if [ -f "$XRDP_INI.dpkg-new" ]; then base="$XRDP_INI.dpkg-new"; fi
   # 同目录临时文件加 rename：写到一半失败时原文件不变。
   tmp="$(mktemp "$XRDP_INI.XXXXXX")"
   trap 'rm -f "$tmp"' EXIT
-  render_xrdp "$XRDP_INI" "$tmp" "$RDP_MODE" "$RDP_PORT"
+  render_xrdp "$base" "$tmp" "$RDP_MODE" "$RDP_PORT"
   if ! cmp -s "$tmp" "$XRDP_INI"; then
     chmod --reference="$XRDP_INI" "$tmp"
     chown --reference="$XRDP_INI" "$tmp"
@@ -549,6 +552,10 @@ configure_rdp() (
     if systemctl is-active --quiet xrdp; then
       warn "RDP config changed; log out and run: sudo systemctl restart xrdp"
     fi
+  fi
+  if [ "$base" != "$XRDP_INI" ]; then
+    rm -f "$base"
+    info "Adopted the new default $XRDP_INI from the xrdp package"
   fi
   usermod -aG ssl-cert xrdp
 )

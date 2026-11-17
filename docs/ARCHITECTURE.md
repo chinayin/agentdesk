@@ -108,7 +108,7 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 
 ## 6. 远程连接
 
-- Debian 13 的 xrdp/xorgxrdp 来自官方 trixie-backports（0.10.6.1，带 H.264，与 Ubuntu 26.10 同代）：系统未配置该源时写入 `/etc/apt/sources.list.d/agentdesk-backports.sources`，只这两个包指定 backports，依赖仍来自 stable。backports 不受 Debian 安全团队覆盖，所以 init 对它们例外地升级到最新版（会重启 xrdp），其余包仍只补缺。
+- Debian 13 的 xrdp/xorgxrdp 来自官方 trixie-backports（0.10.6.1，带 H.264，与 Ubuntu 26.10 同代）：系统未配置该源时写入 `/etc/apt/sources.list.d/agentdesk-backports.sources`，只这两个包指定 backports，依赖仍来自 stable。backports 不受 Debian 安全团队覆盖，所以 init 对它们例外地升级到最新版（会重启 xrdp），其余包仍只补缺。升级时保留已改过的 `xrdp.ini`（不在无终端时询问），随后以包附带的新默认配置 `xrdp.ini.dpkg-new` 为底重新应用监听设置，从而采用 `runtime_user=xrdp` 等新默认值。
 - `direct`（默认）监听 `0.0.0.0:PORT`，由用户在安全组或防火墙中限制来源 IP；`tunnel` 只监听 `127.0.0.1`，经 SSH 端口转发访问。
 - `verify` 检查软件包（含 Chrome、VS Code）、共享清单中的 mise 工具是否装齐、SSH 服务或 socket 及 `sshd -T` 中全部端口的监听、工作账户的有效认证配置、密码状态和密码规则，以及 xrdp 服务与 `xrdp.ini` 的实际监听；`[PASS]/[FAIL]` 输出到 stdout，外部 SSH/RDP 登录仍需实测。自动安全更新（unattended-upgrades）未启用时输出 `[WARN]` 和启用命令，不计入失败：AgentDesk 不做全机升级，xrdp 等对外服务的补丁依赖它。
 - SSH 用 `00-agentdesk.conf` 中的 `Match User` 只为工作账户启用密码认证、禁止空密码；切换 `--user` 会替换旧规则。要求主配置在首个 `Match` 前全局 Include 受管文件或 `sshd_config.d/*.conf`，写入后先检查语法和有效配置，再 reload，失败恢复原文件。其他账户的认证配置保留。

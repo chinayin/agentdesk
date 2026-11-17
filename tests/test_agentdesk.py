@@ -248,6 +248,31 @@ class HostTests(unittest.TestCase):
                 self.assertEqual(rendered.count("max_bpp=32\n"), 1)
                 self.assertNotIn("max_bpp=24", rendered)
 
+    RDP = ('XRDP_INI="$1"; DRY_RUN=0; RDP_MODE=tunnel; RDP_PORT=3390; chmod() { :; }; chown() { :; }; '
+           'usermod() { :; }; systemctl() { return 1; }; configure_rdp')
+
+    def test_rdp_config_keeps_package_file_without_upgrade(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / "xrdp.ini"
+            ini.write_text("[Globals]\nport=3389\nmax_bpp=32\n")
+            result = self.function(self.RDP, ini)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(ini.read_text(), "[Globals]\nport=tcp://127.0.0.1:3390\nmax_bpp=32\n")
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["xrdp.ini"])
+
+    def test_rdp_config_adopts_new_package_default_after_upgrade(self):
+        # dpkg 保留了改过的 xrdp.ini；新版默认值（如 runtime_user）在 .dpkg-new 中，必须采用。
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / "xrdp.ini"
+            ini.write_text("[Globals]\nport=tcp://127.0.0.1:3390\nmax_bpp=32\n")
+            Path(f"{ini}.dpkg-new").write_text("[Globals]\nport=3389\nruntime_user=xrdp\nmax_bpp=32\n")
+            result = self.function(self.RDP, ini)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(ini.read_text(),
+                             "[Globals]\nport=tcp://127.0.0.1:3390\nruntime_user=xrdp\nmax_bpp=32\n")
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["xrdp.ini"])
+            self.assertIn("Adopted the new default", result.stderr)
+
     def test_xrdp_rejects_missing_globals(self):
         with tempfile.TemporaryDirectory() as tmp:
             src, dest = Path(tmp) / "in", Path(tmp) / "out"
