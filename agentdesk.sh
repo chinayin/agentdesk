@@ -2,7 +2,7 @@
 # AgentDesk CLI：主机初始化、检查、桌面重置与软件命令；不执行用户的 mise task。
 set -euo pipefail
 
-VERSION="0.4.0"
+VERSION="0.4.1-dev"
 # 解析全局入口的软链，资源相对于真实程序目录。
 agentdesk_source="${BASH_SOURCE[0]}"
 while [ -L "$agentdesk_source" ]; do
@@ -68,6 +68,7 @@ Commands:
   rdp                Print an RDP URL (macOS: open "$(ssh HOST agentdesk rdp)")
   install [NAME...]  Add software to your list, or install what is missing
   upgrade            Upgrade installed software
+  outdated           List software that upgrade would update
   run TASK [ARGS]    Run a task from your mise config
   desktop-reset      Reset your XFCE settings to the defaults (requires --force)
   update             Update AgentDesk itself
@@ -80,7 +81,7 @@ Init options (saved to /etc/agentdesk/agentdesk.yaml and reused later):
   --locale NAME      en_US.UTF-8 | zh_CN.UTF-8 (default: keep system language)
 
 Other options:
-  --system           install/upgrade: shared software for all users (admin)
+  --system           install/upgrade/outdated: shared software for all users (admin)
   --ref REF          update: branch or tag to install (default: latest release)
   --proxy URL        HTTP(S) proxy for this run only
   --force            Confirm desktop-reset
@@ -329,7 +330,7 @@ install_packages() {
     polkitd pkexec ssl-cert librsvg2-common adwaita-icon-theme greybird-gtk-theme \
     fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core \
     fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 \
-    im-config sassc libglib2.0-dev-bin libxml2-utils gnome-themes-extra extrepo
+    im-config sassc libglib2.0-dev-bin libxml2-utils gnome-themes-extra extrepo libpam-pwquality
 }
 
 # mise 来自官方 apt 源（经 extrepo 启用，带签名校验）。
@@ -367,6 +368,20 @@ configure_locale() {
   locale-gen >&2
 }
 
+# 全机密码规则（pam_pwquality）；只约束之后设置的密码，已有密码不回溯检查。
+PASSWORD_POLICY=/etc/security/pwquality.conf.d/agentdesk.conf
+PASSWORD_RULES="at least 10 characters with 3 of: lowercase, uppercase, digit, symbol"
+
+configure_password_policy() {
+  local root="$1"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dry-run: require passwords with $PASSWORD_RULES in $PASSWORD_POLICY"
+    return
+  fi
+  install -d -m 0755 "$root${PASSWORD_POLICY%/*}"
+  install -m 0644 "$SCRIPT_DIR/resources/security/pwquality.conf.d/agentdesk.conf" "$root$PASSWORD_POLICY"
+}
+
 configure_account() {
   if ! getent passwd "$DESKTOP_USER" >/dev/null; then
     run useradd --create-home --shell /bin/bash --user-group "$DESKTOP_USER"
@@ -376,7 +391,7 @@ configure_account() {
   if [ "$DRY_RUN" -eq 1 ]; then
     info "dry-run: preserve desktop password"
   elif [ "$(passwd -S "$DESKTOP_USER" | awk '{print $2}')" != P ]; then
-    warn "SSH and RDP password login is not ready: run sudo passwd $DESKTOP_USER before connecting"
+    warn "SSH and RDP password login is not ready: run sudo passwd $DESKTOP_USER before connecting ($PASSWORD_RULES)"
   fi
 }
 
@@ -480,11 +495,14 @@ configure_rdp() (
     return
   fi
   local tmp
-  tmp="$(mktemp)"
+  # 同目录临时文件加 rename：写到一半失败时原文件不变。
+  tmp="$(mktemp "$XRDP_INI.XXXXXX")"
   trap 'rm -f "$tmp"' EXIT
   render_xrdp "$XRDP_INI" "$tmp" "$RDP_MODE" "$RDP_PORT"
   if ! cmp -s "$tmp" "$XRDP_INI"; then
-    cat "$tmp" > "$XRDP_INI"
+    chmod --reference="$XRDP_INI" "$tmp"
+    chown --reference="$XRDP_INI" "$tmp"
+    mv -f "$tmp" "$XRDP_INI"
     info "Updated $XRDP_INI: mode=$RDP_MODE port=$RDP_PORT"
     if systemctl is-active --quiet xrdp; then
       warn "RDP config changed; log out and run: sudo systemctl restart xrdp"
@@ -493,8 +511,21 @@ configure_rdp() (
   usermod -aG ssl-cert xrdp
 )
 
+# 把程序文件复制到新目录；任一步失败返回非 0，由调用方清理。
+stage_program() {
+  local staging="$1" item mode
+  shift
+  install -d -m 0755 "$staging" || return 1
+  for item in "$@"; do
+    mode=0644
+    case "$item" in *.sh) mode=0755 ;; esac
+    case "$item" in */*) install -d -m 0755 "$staging/${item%/*}" || return 1 ;; esac
+    install -m "$mode" "$SCRIPT_DIR/$item" "$staging/$item" || return 1
+  done
+}
+
 install_program() {
-  local program_only="${1:-0}" root="${2:-}" item mode parent
+  local program_only="${1:-0}" root="${2:-}" item parent staging previous
   local destination="$root/usr/local/lib/agentdesk" link="$root/usr/local/bin/agentdesk"
   local software_config="$root/etc/mise/config.toml"
   local directories=("$root/usr/local" "$root/usr/local/lib" "$root/usr/local/bin" "$destination")
@@ -538,14 +569,24 @@ install_program() {
   if [ "$program_only" -eq 0 ] && { [ -e "$software_config" ] || [ -L "$software_config" ]; }; then
     [ ! -L "$software_config" ] && [ -f "$software_config" ] || missing "unsafe $software_config"
   fi
-  # 前两项 /usr/local、/usr/local/lib 只做检查，不改其权限。
-  install -d -m 0755 "${directories[@]:2}"
+  # 前两项 /usr/local、/usr/local/lib 只做检查，不改其权限；程序目录整体替换，不在此创建。
+  for item in "${directories[@]:2}"; do
+    case "$item" in "$destination"|"$destination"/*) ;; *) install -d -m 0755 "$item" ;; esac
+  done
   if [ "$SCRIPT_DIR" != "$destination" ]; then
-    for item in "${files[@]}"; do
-      mode=0644
-      case "$item" in *.sh) mode=0755 ;; esac
-      install -m "$mode" "$SCRIPT_DIR/$item" "$destination/$item"
-    done
+    # 先完整复制到同级临时目录再整体替换：失败时已安装的程序不变，正在运行的旧脚本也不被改写。
+    # 不保留旧版本。
+    staging="${destination%/*}/.agentdesk.new"
+    previous="${destination%/*}/.agentdesk.old"
+    mkdir -p "${destination%/*}"
+    rm -rf "$staging" "$previous"
+    if ! stage_program "$staging" "${files[@]}"; then
+      rm -rf "$staging"
+      die "failed to copy program files; installed program unchanged"
+    fi
+    if [ -e "$destination" ]; then mv "$destination" "$previous"; fi
+    mv "$staging" "$destination"
+    rm -rf "$previous"
   fi
   if [ ! -L "$link" ]; then
     ln -s "$destination/agentdesk.sh" "$link"
@@ -582,12 +623,20 @@ theme_checkout() {
   [ "$(git -C "$path" rev-parse HEAD)" = "$revision" ] || die "unexpected theme revision"
 }
 
+# 以 nobody 身份在工作目录中运行上游 install.sh；参数为工作目录、源码子目录和安装参数。
+theme_installer() {
+  local work="$1" source="$2"
+  shift 2
+  runuser -u nobody -- env -i -C "$work/$source" HOME="$work" PATH=/usr/local/bin:/usr/bin:/bin \
+    TERM=xterm LANG=C.UTF-8 bash install.sh "$@"
+}
+
 # 主题装到系统目录，全机共用；参数为根目录前缀（测试用临时目录）。
 install_theme() {
   local root="$1"
   local cache="$root/var/cache/agentdesk/themes" marker="$root/var/lib/agentdesk/theme"
   local themes="$root/usr/share/themes" icons="$root/usr/share/icons"
-  local revision="$THEME_GTK_REV $THEME_ICON_REV" gtk_status=0
+  local revision="$THEME_GTK_REV $THEME_ICON_REV" gtk_status=0 work item target
   if [ -r "$marker" ] && [ "$(cat "$marker")" = "$revision" ] &&
     [ -f "$themes/WhiteSur-Dark/gtk-3.0/gtk.css" ] && [ -f "$themes/WhiteSur-Dark/xfwm4/themerc" ] &&
     [ -f "$icons/WhiteSur-dark/index.theme" ]; then
@@ -598,14 +647,28 @@ install_theme() {
   theme_checkout https://github.com/vinceliuice/WhiteSur-gtk-theme.git "$THEME_GTK_REV" "$cache/gtk-$THEME_GTK_REV"
   theme_checkout https://github.com/vinceliuice/WhiteSur-icon-theme.git "$THEME_ICON_REV" "$cache/icons-$THEME_ICON_REV"
   info "Installing WhiteSur; third-party installer output: $cache/install.log"
+  # 第三方安装脚本以 nobody 在临时目录运行，root 只复制检查过的产物。
+  work="$(mktemp -d)"
+  mkdir -p "$work/gtk" "$work/icons" "$work/out/themes" "$work/out/icons"
+  git -C "$cache/gtk-$THEME_GTK_REV" archive HEAD | tar -x -C "$work/gtk"
+  git -C "$cache/icons-$THEME_ICON_REV" archive HEAD | tar -x -C "$work/icons"
+  chown -R nobody "$work"
   # 上游无活动 XFCE 会话时 fix_whiskermenu 可能失败，以最终产物为准。
-  (cd "$cache/gtk-$THEME_GTK_REV" && TERM=xterm bash install.sh -d "$themes" -c dark -o normal) \
-    > "$cache/install.log" 2>&1 || gtk_status=$?
-  [ -f "$themes/WhiteSur-Dark/gtk-3.0/gtk.css" ] && [ -f "$themes/WhiteSur-Dark/xfwm4/themerc" ] ||
-    die "GTK theme incomplete; inspect $cache/install.log"
+  theme_installer "$work" gtk -d "$work/out/themes" -c dark -o normal > "$cache/install.log" 2>&1 || gtk_status=$?
+  [ -f "$work/out/themes/WhiteSur-Dark/gtk-3.0/gtk.css" ] && [ -f "$work/out/themes/WhiteSur-Dark/xfwm4/themerc" ] ||
+    { rm -rf "$work"; die "GTK theme incomplete; inspect $cache/install.log"; }
   [ "$gtk_status" -eq 0 ] || warn "GTK installer returned $gtk_status; theme files exist, inspect $cache/install.log"
-  (cd "$cache/icons-$THEME_ICON_REV" && TERM=xterm bash install.sh -d "$icons") >> "$cache/install.log" 2>&1
-  [ -f "$icons/WhiteSur-dark/index.theme" ] || die "icon theme incomplete; inspect $cache/install.log"
+  theme_installer "$work" icons -d "$work/out/icons" >> "$cache/install.log" 2>&1 || { rm -rf "$work"; die "icon installer failed; inspect $cache/install.log"; }
+  [ -f "$work/out/icons/WhiteSur-dark/index.theme" ] || { rm -rf "$work"; die "icon theme incomplete; inspect $cache/install.log"; }
+  # 只取 WhiteSur 开头的产物，同名主题整体替换；cp -R 保留符号链接（图标主题大量使用）
+  # 而不跟随，文件归 root 所有。
+  for item in "$work"/out/themes/WhiteSur* "$work"/out/icons/WhiteSur*; do
+    target="$themes"
+    case "$item" in "$work/out/icons/"*) target="$icons" ;; esac
+    rm -rf "${target:?}/${item##*/}"
+    cp -R "$item" "$target/"
+  done
+  rm -rf "$work"
   printf '%s\n' "$revision" > "$marker"
 }
 
@@ -656,6 +719,7 @@ initialize() {
     trap 'systemctl unmask --runtime xrdp.service xrdp-sesman.service >/dev/null 2>&1' EXIT
   fi
   install_packages
+  configure_password_policy ""
   configure_account
   configure_ssh
   configure_locale
@@ -683,6 +747,31 @@ initialize() {
   else
     show_info
   fi
+}
+
+# init 的进度与错误（stderr）同时写入日志，root 所有、只保留最近 5 份；连接信息（stdout）不记录。
+# 代理只在环境变量中，不会出现在日志里。dry-run 不写日志。
+INIT_LOG_DIR=/var/log/agentdesk
+
+run_init() {
+  local log status=0 logs
+  if [ "$DRY_RUN" -eq 1 ]; then
+    initialize
+    return
+  fi
+  install -d -m 0700 "$INIT_LOG_DIR"
+  log="$INIT_LOG_DIR/init-$(date +%Y%m%d-%H%M%S).log"
+  (umask 077 && : >> "$log")
+  # stderr 经 tee 同时进入日志和终端，stdout 原样输出；pipefail 保留 initialize 的退出码。
+  { initialize 2>&1 >&3 3>&- | tee -a "$log" >&2 3>&-; } 3>&1 || status=$?
+  # 文件名按时间排序，通配符展开即为时间顺序。
+  logs=("$INIT_LOG_DIR"/init-*.log)
+  if [ "${#logs[@]}" -gt 5 ]; then rm -f "${logs[@]:0:${#logs[@]}-5}"; fi
+  if [ "$status" -ne 0 ]; then
+    echo "Error: init failed (exit $status); log: $log" >&2
+    exit "$status"
+  fi
+  info "Log: $log"
 }
 
 # 云主机的公网地址：按 DMI 厂商只查对应平台的实例元数据（AWS IMDSv2、阿里云），
@@ -720,6 +809,20 @@ load_connection() {
   [ "$conn_mode" = direct ] || conn_target=127.0.0.1:13389
 }
 
+# xrdp 证书的 SHA-256 指纹，供首次连接时与客户端提示比对；[Globals] 未设置 certificate
+# 时 xrdp 使用 /etc/xrdp/cert.pem。证书是公开内容，普通用户可读；读不到时为空。
+rdp_fingerprint() {
+  local certificate
+  certificate="$(awk '
+    /^[[:space:]]*\[/ { inside = ($0 ~ /^[[:space:]]*\[Globals\][[:space:]]*$/) }
+    inside && /^[[:space:]]*certificate[[:space:]]*=/ {
+      sub(/^[[:space:]]*certificate[[:space:]]*=[[:space:]]*/, ""); sub(/[[:space:]]*$/, ""); print; exit
+    }
+  ' "$XRDP_INI" 2>/dev/null)" || certificate=""
+  case "$certificate" in "") certificate="${XRDP_INI%/*}/cert.pem" ;; /*) ;; *) certificate="${XRDP_INI%/*}/$certificate" ;; esac
+  openssl x509 -noout -fingerprint -sha256 -in "$certificate" 2>/dev/null | sed -n 's/^[^=]*=//p'
+}
+
 # 地址和用户名已校验；编码值中的冒号，兼容 macOS 的 URL 解析。
 rdp_url() {
   printf 'rdp://full%%20address=s%%3A%s&username=s%%3A%s\n' "${1//:/%3A}" "$DESKTOP_USER"
@@ -738,14 +841,15 @@ show_rdp() {
 # 不输出任何凭据。
 show_info() {
   local conn_endpoint conn_port conn_mode conn_server conn_target
-  local password="" addresses zone
+  local password="" addresses zone fingerprint
   load_connection
+  fingerprint="$(rdp_fingerprint)" || fingerprint=""
   # 只有 root 能读其他账户的密码状态。
   if [ "$EUID" -eq 0 ]; then
     if password_ready "$DESKTOP_USER"; then
       password=" (password set)"
     else
-      password=" (no password yet: sudo passwd ${DESKTOP_USER})"
+      password=" (no password yet: sudo passwd ${DESKTOP_USER}; ${PASSWORD_RULES})"
     fi
   fi
   zone="$(timedatectl show -p Timezone --value 2>/dev/null)" || zone=""
@@ -755,6 +859,7 @@ AgentDesk $VERSION
 
 Login user      ${DESKTOP_USER}${password}
 RDP listener    ${conn_endpoint} (${conn_mode})
+RDP certificate ${fingerprint:-unknown} (SHA-256)
 Public address  ${conn_server:-unknown}
 Time zone       ${zone:-unknown}
 
@@ -817,8 +922,38 @@ ssh_active() {
   systemctl is-active --quiet ssh || systemctl is-active --quiet ssh.socket
 }
 
+# 任一地址（0.0.0.0、[::]、*）上监听该端口即可；输入为 ss -H -ltn 的输出。
+port_matches() {
+  awk -v port="$1" '{ n = split($4, part, ":"); if (part[n] == port) found = 1 } END { exit !found }'
+}
+
+# sshd 有效配置中的全部端口；读取主机密钥需要 root。
+ssh_ports() {
+  "$SSHD" -T -f "$SSHD_CONFIG" 2>/dev/null | awk 'tolower($1) == "port" { print $2 }'
+}
+
 ssh_listener_ready() {
-  ss -H -ltn | awk '$4 ~ /:22$/ { found=1 } END { exit !found }'
+  local port listeners
+  [ "$#" -gt 0 ] || return 1
+  listeners="$(ss -H -ltn)" || return 1
+  for port in "$@"; do
+    port_matches "$port" <<< "$listeners" || return 1
+  done
+}
+
+# 共享清单中的工具都已安装（mise ls --missing 无输出）。
+shared_tools_ready() {
+  local missing
+  missing="$(system_mise ls --missing)" || return 1
+  [ -z "$missing" ]
+}
+
+# AgentDesk 不做全机升级；xrdp 等对外服务的安全更新依赖系统的 unattended-upgrades。
+security_updates_enabled() {
+  local periodic=""
+  package_installed unattended-upgrades || return 1
+  eval "$(apt-config shell periodic APT::Periodic::Unattended-Upgrade)"
+  [ "$periodic" = 1 ]
 }
 
 # 读取 init 写入 xrdp.ini 的 tcp://地址:端口。
@@ -840,7 +975,7 @@ verify() {
     info "dry-run: check packages, mise, account, session files, SSH and RDP"
     return
   fi
-  local failures=0 package endpoint
+  local failures=0 package endpoint ports
   # 检查结果是产物，写 stdout。
   check() {
     local label="$1"; shift
@@ -851,16 +986,34 @@ verify() {
       failures=$((failures + 1))
     fi
   }
-  for package in xfce4 gvfs gvfs-daemons xrdp xorgxrdp openssh-server fcitx5 fcitx5-chinese-addons fonts-noto-cjk librsvg2-common mise; do
+  # 建议项：不通过只提示，不计入失败。
+  advise() {
+    local label="$1" hint="$2"; shift 2
+    if "$@" >/dev/null 2>&1; then
+      echo "[PASS] $label"
+    else
+      echo "[WARN] $label: $hint"
+    fi
+  }
+  for package in xfce4 gvfs gvfs-daemons xrdp xorgxrdp openssh-server fcitx5 fcitx5-chinese-addons \
+    fonts-noto-cjk librsvg2-common libpam-pwquality mise google-chrome-stable code; do
     check "$package installed" package_installed "$package"
   done
+  check "shared tools installed" shared_tools_ready
   check "xrdp active" systemctl is-active --quiet xrdp
   check "xrdp enabled" systemctl is-enabled --quiet xrdp
   check "xrdp-sesman active" systemctl is-active --quiet xrdp-sesman
   check "SSH active" ssh_active
-  check "SSH listener TCP 22" ssh_listener_ready
+  ports="$(ssh_ports | paste -sd ' ' -)" || ports=""
+  # 端口列表按空格拆分为参数。
+  # shellcheck disable=SC2086
+  check "SSH listener TCP ${ports:-unknown}" ssh_listener_ready $ports
   check "SSH password authentication for $DESKTOP_USER" ssh_password_enabled
   check "SSH and RDP password set" password_ready "$DESKTOP_USER"
+  check "password policy present" test -f "$PASSWORD_POLICY"
+  advise "automatic security updates" \
+    "run sudo apt-get install unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades" \
+    security_updates_enabled
   check "desktop defaults present" test -f /etc/xdg/agentdesk/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml
   check "desktop session environment present" test -f /etc/X11/Xsession.d/21agentdesk
   check "login environment present" test -f /etc/profile.d/agentdesk.sh
@@ -903,10 +1056,6 @@ reset_desktop() {
 # 软件命令只分派原生 mise；系统层由 mise 合并 config.toml 与 config.local.toml（后者优先）。
 SHARED_MISE_FILES=(/etc/mise/config.toml /etc/mise/config.local.toml /etc/mise/mise.lock /etc/mise/mise.local.lock)
 
-software_exec() {
-  if [ "$DRY_RUN" -eq 1 ]; then run "$@"; else "$@"; fi
-}
-
 software_shared_permissions() {
   # mise 原子生成的锁可能为 0600；共享清单和锁必须能被普通用户读取。
   local shared_file
@@ -918,6 +1067,19 @@ software_shared_permissions() {
   done
 }
 
+# 系统 mise：只读系统配置，忽略调用者环境、项目和 root 的个人配置。
+# 不设 MISE_SYSTEM_CONFIG_FILE，否则只加载单个文件，config.local.toml 会被忽略。
+system_mise() {
+  proxy_env
+  env -i HOME=/root USER=root LOGNAME=root \
+    PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+    ${PROXY_ENV[@]+"${PROXY_ENV[@]}"} \
+    LANG=C.UTF-8 MISE_IGNORED_CONFIG_PATHS=/root/.config/mise \
+    MISE_INSTALLS_DIR=/usr/local/share/mise/installs \
+    MISE_SHIMS_DIR=/usr/local/share/mise/shims \
+    "$SYSTEM_MISE" -C / "$@"
+}
+
 software_mise() {
   if [ "$DRY_RUN" -eq 1 ]; then
     # 预览不打印代理等环境值。
@@ -925,19 +1087,13 @@ software_mise() {
     return
   fi
   if [ "$SOFTWARE_SYSTEM" -eq 1 ]; then
-    # 只读系统配置：忽略调用者环境、项目和 root 的个人配置。
-    # 不设 MISE_SYSTEM_CONFIG_FILE，否则只加载单个文件，config.local.toml 会被忽略。
-    proxy_env
-    software_exec env -i HOME=/root USER=root LOGNAME=root \
-      PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
-      ${PROXY_ENV[@]+"${PROXY_ENV[@]}"} \
-      LANG=C.UTF-8 MISE_IGNORED_CONFIG_PATHS=/root/.config/mise \
-      MISE_INSTALLS_DIR=/usr/local/share/mise/installs \
-      MISE_SHIMS_DIR=/usr/local/share/mise/shims \
-      "$SOFTWARE_MISE" -C / "$@"
+    # 调用方常写在 || 之后（errexit 不生效），须显式保留 mise 的退出码。
+    local status=0
+    system_mise "$@" || status=$?
     software_shared_permissions
+    return "$status"
   else
-    software_exec "$SOFTWARE_MISE" -C / "$@"
+    "$SOFTWARE_MISE" -C / "$@"
   fi
 }
 
@@ -986,7 +1142,7 @@ software_main() (
       task_args=("$item" "$@")
       break
     fi
-    [ "$action" = install ] || { usage >&2; die "upgrade takes no names; edit the config or use native mise for selective upgrades"; }
+    [ "$action" = install ] || { usage >&2; die "$action takes no names; edit the config or use native mise for selective upgrades"; }
     # 名称原样交给 mise 解析。
     [[ "$item" =~ ^[a-zA-Z0-9][a-zA-Z0-9_./:@+~-]*$ ]] || die "invalid software name: $item"
     case "$item" in
@@ -1051,6 +1207,9 @@ software_main() (
   fi
   if [ "$action" = run ]; then
     software_mise run "${task_args[@]}"
+  elif [ "$action" = outdated ]; then
+    # 与 upgrade 的范围一致：个人只看个人清单，--system 看两份系统清单。
+    personal_only outdated
   elif [ "${#tools[@]}" -gt 0 ] || [ "${#packages[@]}" -gt 0 ]; then
     if [ "${#tools[@]}" -gt 0 ]; then
       software_mise use "${config_args[@]}" "${tools[@]}"
@@ -1148,7 +1307,7 @@ main() {
     esac
   done
   case "$command" in
-    install|upgrade|run)
+    install|upgrade|outdated|run)
       software_main "$command" "${@:1:index-1}" "${@:index+1}"
       return ;;
     update)
@@ -1163,12 +1322,14 @@ main() {
   esac
   preflight
   case "$COMMAND" in
-    init) initialize ;;
+    init) run_init ;;
     verify) verify ;;
     desktop-reset) reset_desktop ;;
   esac
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  # 读完 main 就退出：更新可能已替换本文件，bash 不再从旧偏移继续读取。
   main "$@"
+  exit $?
 fi

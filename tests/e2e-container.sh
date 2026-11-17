@@ -25,6 +25,7 @@ verify() {
   grep -q 'Connection address unavailable' "$REPORT/info.txt"
   agentdesk rdp | grep -q '127.0.0.1%3A13389'
   grep -q '(password set)' "$REPORT/info.txt"
+  grep -Eq '^RDP certificate +([0-9A-F]{2}:){31}[0-9A-F]{2} ' "$REPORT/info.txt"
   desktop_user agentdesk info > /dev/null
   for tool in git node python go pnpm uv claude codex pi gh glab aws aliyun cloudflared \
     rg fd jq shellcheck yamlfmt bats direnv betterleaks tmux; do
@@ -44,8 +45,13 @@ verify() {
 case "${1:-}" in
   install)
     bash "$ROOT/install.sh" --user desk --theme none --rdp-mode tunnel
-    # 一次性密码只进入容器内 chpasswd，不输出、不导出到宿主文件。
-    python3 -c 'import secrets; print("desk:" + secrets.token_urlsafe(32))' | chpasswd
+    ls /var/log/agentdesk/init-*.log
+    # 密码规则对 root 同样强制：弱密码被拒绝。
+    if echo 'desk:abcdefghij' | chpasswd 2>/dev/null; then
+      echo 'Error: weak password accepted' >&2; exit 1
+    fi
+    # 一次性密码只进入容器内 chpasswd，不输出、不导出到宿主文件；前缀保证满足字符类别要求。
+    python3 -c 'import secrets; print("desk:Aa1-" + secrets.token_urlsafe(32))' | chpasswd
     verify
     grep -qx '  mode: tunnel' /etc/agentdesk/agentdesk.yaml
     # 管理员的本机增补写 config.local.toml，不改 AgentDesk 维护的 config.toml。
@@ -68,12 +74,14 @@ case "${1:-}" in
     cmp /etc/mise/config.toml "$ROOT/mise.toml"
     grep -q 'apt:htop' /etc/mise/config.local.toml
     agentdesk upgrade --system
+    agentdesk outdated --system
     verify
     # 真正使用用户自定义工具；确认原生 mise 和 AgentDesk 写同一文件。
     sha256sum /etc/mise/config.toml /etc/mise/config.local.toml /etc/mise/mise.lock > "$REPORT/shared.sha256"
     desktop_user agentdesk install ruff
     desktop_user mise use -g ruff@latest
     desktop_user agentdesk upgrade
+    desktop_user agentdesk outdated
     desktop_user ruff --version
     sha256sum --check "$REPORT/shared.sha256"
     echo '[PASS] First install, saved settings, managed and local config, upgrades, personal software' >&2

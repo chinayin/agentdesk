@@ -13,8 +13,8 @@ AgentDesk 是一个 Bash CLI，把 Ubuntu/Debian 云主机初始化为 XFCE/xrdp
 | 文件 | 作用 |
 |---|---|
 | `install.sh` | 安装入口。管道运行时下载最新发布标签（或 `--ref`）的 GitHub 源码包；在源码目录内直接用本地文件（`--remote` 强制下载）。默认执行 `init`；`--update-only` 只复制程序 |
-| `agentdesk.sh` | 全部逻辑：`init`、`verify`、`info`、`rdp`、`desktop-reset`、`update`，以及分派给原生 mise 的 `install`、`upgrade`、`run` |
-| `resources/` | 安装到主机的配置：`xdg/`（XFCE、Fcitx5 默认值）、`Xsession.d/`（图形会话环境）、`profile.d/`（登录环境） |
+| `agentdesk.sh` | 全部逻辑：`init`、`verify`、`info`、`rdp`、`desktop-reset`、`update`，以及分派给原生 mise 的 `install`、`upgrade`、`outdated`、`run` |
+| `resources/` | 安装到主机的配置：`xdg/`（XFCE、Fcitx5 默认值）、`Xsession.d/`（图形会话环境）、`profile.d/`（登录环境）、`security/`（密码规则） |
 | `mise.toml` | AgentDesk 维护的全机软件清单，init 时覆盖为 `/etc/mise/config.toml` |
 | `mise.example.toml` | 本地清单示例，不安装到主机 |
 | `skills/agentdesk-create/` | 用云厂商原生 CLI 创建、部署、验收云主机；skill 里不写主机地址、账号或资源 ID，运行记录放在被忽略的 `local/` |
@@ -29,12 +29,15 @@ flowchart TD
     A["install.sh"] -->|源码目录内| C["agentdesk.sh init"]
     A -->|curl 管道| B["解析最新发布标签（或 --ref），下载 GitHub 源码包"] --> C
     C --> P["参数：命令行 > /etc/agentdesk/agentdesk.yaml > 默认值；检查系统，非 root 时经 sudo 重新执行"]
-    P --> M["首次安装临时 mask xrdp，监听配置写好前不对外开放"]
-    M --> K["apt 安装基础包、XFCE、xrdp、字体、输入法（不做全机升级）；生成 en_US、zh_CN locale"]
-    K --> U["创建或复用 SSH/桌面账户；启用该账户的 SSH 密码认证，密码由用户手动设置"]
-    U --> Z["extrepo 启用 mise 官方 apt 源，安装或升级 mise"]
+    P --> L["进度与错误同时写入 /var/log/agentdesk/init-时间戳.log"]
+    L --> M["首次安装临时 mask xrdp，监听配置写好前不对外开放"]
+    M --> K["apt 安装基础包、XFCE、xrdp、字体、输入法、pwquality（不做全机升级）"]
+    K --> Q["写入全机密码规则"]
+    Q --> U["创建或复用 SSH/桌面账户；启用该账户的 SSH 密码认证，密码由用户手动设置"]
+    U --> G["生成 en_US、zh_CN locale"]
+    G --> Z["extrepo 启用 mise 官方 apt 源，安装或升级 mise"]
     Z --> R["写 xrdp.ini 监听地址与端口"]
-    R --> I["复制程序到 /usr/local/lib/agentdesk；覆盖 /etc/mise/config.toml"]
+    R --> I["程序复制到临时目录后整体替换 /usr/local/lib/agentdesk；覆盖 /etc/mise/config.toml"]
     I --> S["agentdesk install --system：安装共享工具和桌面应用"]
     S --> D["安装主题；写入桌面默认值、Xsession.d、profile.d"]
     D --> E["unmask、enable、start xrdp（不重启已运行的服务）"]
@@ -50,6 +53,8 @@ flowchart TD
 /usr/local/lib/agentdesk/            # 程序，root 所有
 /etc/agentdesk/agentdesk.yaml        # init 保存的参数
 /etc/ssh/sshd_config.d/00-agentdesk.conf # 工作账户的 SSH 密码认证
+/etc/security/pwquality.conf.d/agentdesk.conf # 全机密码规则
+/var/log/agentdesk/init-*.log         # init 日志，root 可读，保留最近 5 份
 /etc/xdg/agentdesk/                  # 桌面系统默认值（XFCE、Fcitx5、自启动）
 /etc/X11/Xsession.d/21agentdesk      # 图形会话：XDG_CONFIG_DIRS、语言、独立 D-Bus
 /etc/X11/Xsession.d/90agentdesk-input
@@ -80,7 +85,8 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 | `agentdesk install NAME...` | 个人 | `mise use --global` 记录并安装；`apt:` 前缀写入 `[bootstrap.packages]` |
 | `agentdesk install` | 个人 | 按清单和锁补齐 |
 | `agentdesk upgrade` | 个人 | `lock --bump` 在版本范围内刷新锁，再 `install --locked`；apt 包执行 upgrade |
-| `agentdesk install/upgrade --system` | 系统 | 同上；带名称时写入 `config.local.toml`；需要管理员权限 |
+| `agentdesk outdated` | 个人 | `mise outdated`：列出 upgrade 会更新的工具（不含 apt 包），范围与 upgrade 相同 |
+| `agentdesk install/upgrade/outdated --system` | 系统 | 同上；带名称时写入 `config.local.toml`；需要管理员权限 |
 | `agentdesk run TASK [ARGS]` | 个人 | 执行个人清单中的 mise 任务 |
 
 - **作用域隔离**用 mise 原生的 `MISE_IGNORED_CONFIG_PATHS`。个人操作只在锁定和 apt 包命令上忽略 `/etc/mise`，不改系统锁，也不替用户升级共享应用；`use`、`install`、`reshim` 照常加载系统清单，与直接运行 mise 一致。原因：mise 在共享安装目录里为每个工具维护 `global` 链接，指向当前用户的全局与系统配置所选的版本，忽略系统清单会让它去改这些链接，而那需要 root。个人锁通过 `MISE_LOCKFILE=1` 开启，不依赖系统清单里的设置。
@@ -96,16 +102,16 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 - 覆盖的 XFCE 频道：面板、外观、窗口管理器、背景、终端。左侧 Dock 的启动器引用软件包的 desktop ID，布局与调整方式见[桌面维护](USER_GUIDE.md#4-桌面维护)；背景是 XFCE 原生渐变，为 xorgxrdp 的显示器 rdp0–rdp3 预置。
 - `21agentdesk` 排在 `20dbus_xdg-runtime` 之后、`75dbus_dbus-launch` 之前，取消共享用户总线，让每个 RDP 会话有独立 D-Bus；仅在有语言覆盖值时设置桌面语言（见[安装参数](USER_GUIDE.md#参数)）。`90agentdesk-input` 排在 im-config 之后，设置 Fcitx5 变量。
 - `profile.d/agentdesk.sh` 对非 root 用户生效：加入 mise shims 和已安装工具路径（离线解析），交互式 bash 再依次执行 `mise activate` 和 `direnv hook`。XFCE 终端以登录 shell 启动，所以会加载它；`ssh 主机 命令` 这类非登录 shell 不加载。
-- WhiteSur 主题按固定提交装到 `/usr/share`；`--theme none` 用 Greybird/Adwaita。
+- WhiteSur 主题按固定提交装到 `/usr/share`：上游安装脚本以 `nobody` 在临时目录运行，root 只复制检查过的产物；`--theme none` 用 Greybird/Adwaita。
 - `desktop-reset` 必须加 `--force`：要求该用户先退出全部会话，删除上述频道文件和 `panel/` 目录，不做备份；配置中有符号链接（dotfiles）时拒绝。
 - 不修改系统时区（云镜像默认 UTC）。
 
 ## 6. 远程连接
 
 - `direct`（默认）监听 `0.0.0.0:PORT`，由用户在安全组或防火墙中限制来源 IP；`tunnel` 只监听 `127.0.0.1`，经 SSH 端口转发访问。
-- `verify` 检查 SSH 服务或 socket、TCP 22、工作账户的有效认证配置和密码状态，以及 xrdp 服务与 `xrdp.ini` 的实际监听；`[PASS]/[FAIL]` 输出到 stdout，外部 SSH/RDP 登录仍需实测。
+- `verify` 检查软件包（含 Chrome、VS Code）、共享清单中的 mise 工具是否装齐、SSH 服务或 socket 及 `sshd -T` 中全部端口的监听、工作账户的有效认证配置、密码状态和密码规则，以及 xrdp 服务与 `xrdp.ini` 的实际监听；`[PASS]/[FAIL]` 输出到 stdout，外部 SSH/RDP 登录仍需实测。自动安全更新（unattended-upgrades）未启用时输出 `[WARN]` 和启用命令，不计入失败：AgentDesk 不做全机升级，xrdp 等对外服务的补丁依赖它。
 - SSH 用 `00-agentdesk.conf` 中的 `Match User` 只为工作账户启用密码认证、禁止空密码；切换 `--user` 会替换旧规则。要求主配置在首个 `Match` 前全局 Include 受管文件或 `sshd_config.d/*.conf`，写入后先检查语法和有效配置，再 reload，失败恢复原文件。其他账户的认证配置保留。
-- `info` 按当前模式分组输出连接信息，`rdp` 输出 `rdp://` 链接，都写 stdout、不需要 root、不输出凭据。公网地址只读对应云平台元数据：AWS 和阿里云均携带令牌，请求绕过代理，其他厂商不发请求。取不到地址时，`info` 提示手动查找，`rdp` 报错退出。macOS 用 `open` 打开链接，参数值中的冒号编码为 `%3A`。
+- `info` 按当前模式分组输出连接信息和 xrdp 证书的 SHA-256 指纹（`[Globals]` 的 `certificate`，未设置时为 `/etc/xrdp/cert.pem`），`rdp` 输出 `rdp://` 链接，都写 stdout、不需要 root、不输出凭据。公网地址只读对应云平台元数据：AWS 和阿里云均携带令牌，请求绕过代理，其他厂商不发请求。取不到地址时，`info` 提示手动查找，`rdp` 报错退出。macOS 用 `open` 打开链接，参数值中的冒号编码为 `%3A`。
 
 ## 7. 权限与安全
 
@@ -114,6 +120,8 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 - 不提供下载镜像：网络不通时用 `--proxy`，它一次覆盖全部下载；镜像只能覆盖 AgentDesk 自己的文件。
 - `agentdesk.yaml` 由 root 写入，0644，不含凭据，按行解析，不当作脚本执行。
 - 默认 SSH/桌面账户为 `agentdesk`，已有设置优先，`--user` 可覆盖。新账户加入 sudo 组（需要密码），SSH 和直连 RDP 须限制来源 IP。
+- 密码规则用系统自带的 pam_pwquality：`/etc/security/pwquality.conf.d/agentdesk.conf` 要求至少 10 位、小写/大写/数字/符号中至少三类，并开启 `enforce_for_root`（管理员用 `sudo passwd` 设置时同样强制）。规则全机生效，只约束之后设置的密码。
+- init 日志只记录 stderr（进度与错误），代理只在环境变量中，不进入日志；连接信息写 stdout，不记录。
 - 拒绝符号链接形式、非 root 所有或组/其他可写的安装目录和系统配置；`/usr/local/bin/agentdesk` 不是受管软链时拒绝覆盖。
 - 不自动生成密码，不修改防火墙或云安全组，不自动重启运行中的 xrdp。
 
@@ -124,7 +132,8 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 
 | Homebrew | AgentDesk | 作用 |
 |---|---|---|
-| `brew update` | `agentdesk update [--ref REF]` | 只更新 AgentDesk 程序与随附资源：由 `install.sh --remote --update-only` 下载并复制，不执行 init、install 或 upgrade；显式 `--ref` 总是更新 |
+| `brew update` | `agentdesk update [--ref REF]` | 只更新 AgentDesk 程序与随附资源：由 `install.sh --remote --update-only` 下载，复制到同级临时目录后整体替换程序目录（不保留旧版本，失败时原程序不变），不执行 init、install 或 upgrade；显式 `--ref` 总是更新 |
+| `brew outdated` | `agentdesk outdated [--system]` | 列出 upgrade 会更新的工具 |
 | `brew upgrade` | `agentdesk upgrade [--system]` | 在声明的版本范围内升级软件 |
 | `brew install` | `agentdesk install [--system] [NAME...]` | 记录并安装软件，或补齐清单 |
 
@@ -135,6 +144,6 @@ mise 原生按 `conf.d/*.toml` → `config.toml` → `config.local.toml` 加载�
 
 - 不支持 RHEL、Fedora、openSUSE、Arch 等非 apt 系统。
 - 不做自定义配置格式、profile 继承、软件别名表或每个应用一个安装脚本。
-- 不做回滚框架、状态数据库，不对用户任务承诺幂等。
+- 不做回滚框架、状态数据库，不对用户任务承诺幂等；更新不保留旧版本程序。
 - 不做全机升级、操作系统升级或后台自动更新。
 - 不管理防火墙、云安全组和密码。

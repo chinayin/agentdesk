@@ -19,7 +19,7 @@ Turn a fresh Ubuntu/Debian cloud server into a ready-to-use remote desktop for A
 
 Ubuntu 22.04 / 24.04 / 26.04 / 26.10 or Debian 12 / 13, amd64 or arm64, systemd, root or a sudo user.
 
-For new servers use **Ubuntu 26.10**. Use an SSH tunnel on Ubuntu 22.04. See [choosing a system](docs/USER_GUIDE.md) for the support period and [pending acceptance checks](docs/ROADMAP.md).
+For new servers use **Ubuntu 26.10**. Use an SSH tunnel on Ubuntu 22.04. See [choosing a system](docs/USER_GUIDE.md) for the support period and which systems have been verified.
 
 ## Install
 
@@ -29,7 +29,7 @@ Run on the server:
 curl -fsSL https://raw.githubusercontent.com/chinayin/agentdesk/main/install.sh | sudo bash
 ```
 
-This installs the latest release with `agentdesk` as the default SSH and desktop account. After installation, run `sudo passwd USER` for the account shown in the output; SSH and RDP use the same password.
+This installs the latest release with `agentdesk` as the default SSH and desktop account. After installation, run `sudo passwd USER` for the account shown in the output; SSH and RDP use the same password, which must have at least 10 characters with 3 of: lowercase, uppercase, digit, symbol.
 
 Options go after `bash -s --`:
 
@@ -71,6 +71,7 @@ agentdesk rdp                        # print an RDP URL for macOS
 agentdesk verify                     # check packages, SSH and RDP
 agentdesk install gemini kubectl     # add personal tools (Gemini CLI, Kubernetes CLI)
 agentdesk install apt:htop           # add a system package from apt
+agentdesk outdated                   # list what upgrade would update
 agentdesk upgrade                    # upgrade your personal software
 agentdesk upgrade --system           # upgrade shared tools and apps (admin)
 agentdesk run TASK                   # run a task from your personal mise config
