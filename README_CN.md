@@ -17,9 +17,9 @@
 
 ## 环境要求
 
-Ubuntu 22.04 / 24.04 / 26.04 / 26.10 或 Debian 12 / 13，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。
+Debian/Ubuntu，amd64 或 arm64，systemd，以 root 或有 sudo 权限的用户运行。已验证 **Debian 13**（推荐）和 Ubuntu 26.10。
 
-新机器默认使用 **Ubuntu 26.10**。Ubuntu 22.04 建议用 SSH 隧道连接。支持周期和各系统的验证状态见[选择系统](docs/USER_GUIDE.md)。
+推荐 Debian 13 的原因、支持周期和验证状态见[选择系统](docs/USER_GUIDE.md)。其他 Debian/Ubuntu 版本同样支持，但未经验证，需要自己验证。
 
 ## 安装
 
@@ -101,14 +101,14 @@ agentdesk --help
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | 设计、文件布局、软件作用域、权限 |
 | [TESTING_GUIDE](docs/TESTING_GUIDE.md) | 离线测试、Docker E2E、真机验收 |
 | [ROADMAP](docs/ROADMAP.md) | 未完成事项及验收标准 |
-| [agentdesk-create skill](skills/agentdesk-create/SKILL.md) | 在 AWS / 阿里云创建并验收云桌面 |
+| [agentdesk-create skill](skills/agentdesk-create/SKILL.md) | 在 AWS（默认 Lightsail，或 EC2）/ 阿里云创建并验收云桌面 |
 
 ## 开发
 
 ```bash
 sudo bash install.sh  # 在源码目录内安装
 bash test.sh          # 离线测试，约 10 秒
-bash tests/e2e.sh     # 在 Docker 中做安装测试（默认 Ubuntu 26.10、本机架构）
+bash tests/e2e.sh     # 在 Docker 中做安装测试（默认 Debian 13、本机架构）
 ```
 
 ## 许可

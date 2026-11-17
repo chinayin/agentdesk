@@ -142,12 +142,12 @@ class HostTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             release = Path(tmp) / "os-release"
             for system, like, version, arch, status, warned in [
+                ("debian", "", "13", "amd64", 0, False), ("debian", "", "13", "arm64", 0, False),
                 ("ubuntu", "debian", "26.10", "amd64", 0, False), ("ubuntu", "debian", "26.10", "arm64", 0, False),
-                ("ubuntu", "debian", "26.04", "amd64", 0, False), ("ubuntu", "debian", "24.04", "arm64", 0, False),
-                ("ubuntu", "debian", "22.04", "amd64", 0, False), ("debian", "", "13", "arm64", 0, False),
-                ("debian", "", "12", "amd64", 0, False),
-                # 新版本与衍生版警告后继续；旧版本、非 Debian 系与其他架构拒绝。
-                ("debian", "", "14", "amd64", 0, True), ("linuxmint", "ubuntu debian", "22", "amd64", 0, True),
+                # 其他 Debian 系（含较早的 LTS）警告后继续，由用户自行验证；更旧的版本、非 Debian 系与其他架构拒绝。
+                ("ubuntu", "debian", "26.04", "amd64", 0, True), ("ubuntu", "debian", "22.04", "amd64", 0, True),
+                ("debian", "", "12", "amd64", 0, True), ("debian", "", "14", "amd64", 0, True),
+                ("linuxmint", "ubuntu debian", "22", "amd64", 0, True),
                 ("ubuntu", "debian", "20.04", "amd64", 2, False), ("debian", "", "11", "amd64", 2, False),
                 ("fedora", "", "43", "amd64", 2, False), ("ubuntu", "debian", "26.10", "armhf", 2, False),
             ]:
@@ -155,6 +155,40 @@ class HostTests(unittest.TestCase):
                 result = self.function('detect_platform "$1" "$2"', release, arch)
                 self.assertEqual(result.returncode, status, (system, version, arch, result.stderr))
                 self.assertEqual("Warning: untested OS" in result.stderr, warned, result.stderr)
+
+    def test_debian_13_takes_only_xrdp_from_backports(self):
+        for release, from_backports in [("debian:13", True), ("ubuntu:26.10", False), ("debian:12", False)]:
+            with self.subTest(release=release):
+                result = self.function(f'DRY_RUN=1; OS_RELEASE={release}; install_packages')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                main_install = next(line for line in result.stderr.splitlines() if "--no-upgrade" in line)
+                self.assertEqual(" xrdp " in main_install, not from_backports)
+                self.assertEqual("xrdp/trixie-backports xorgxrdp/trixie-backports" in result.stderr, from_backports)
+                self.assertEqual("enable trixie-backports" in result.stderr, from_backports)
+                # 升级已装的 xrdp 时保留 AgentDesk 改过的 xrdp.ini，不询问。
+                self.assertEqual("--force-confold" in result.stderr, from_backports)
+
+    def test_backports_source_is_added_only_when_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "agentdesk-backports.sources"
+            script = ('DRY_RUN=0; BACKPORTS_SOURCE="$1"; run() { echo "ran $*" >&2; }; '
+                      'apt-cache() { printf "%s\\n" "$POLICY"; }; enable_backports')
+            configured = " 100 mirror+file:/etc/apt/mirrors/debian.list trixie-backports/main amd64 Packages"
+            result = subprocess.run(["bash", "-c", 'source "$1"; shift; ' + NO_SETTINGS + script, "_",
+                                     str(ROOT / "agentdesk.sh"), str(source)],
+                                    env={**os.environ, "POLICY": configured}, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(source.exists())
+            self.assertNotIn("apt-get update", result.stderr)
+            result = subprocess.run(["bash", "-c", 'source "$1"; shift; ' + NO_SETTINGS + script, "_",
+                                     str(ROOT / "agentdesk.sh"), str(source)],
+                                    env={**os.environ, "POLICY": " 500 http://deb.debian.org/debian trixie/main"},
+                                    text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Suites: trixie-backports\n", source.read_text())
+            self.assertIn("Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg", source.read_text())
+            self.assertEqual(source.stat().st_mode & 0o777, 0o644)
+            self.assertIn("ran env DEBIAN_FRONTEND=noninteractive apt-get update", result.stderr)
 
     def test_os_release_does_not_override_agentdesk_version(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -213,6 +247,31 @@ class HostTests(unittest.TestCase):
                 rendered = dest.read_text()
                 self.assertEqual(rendered.count("max_bpp=32\n"), 1)
                 self.assertNotIn("max_bpp=24", rendered)
+
+    RDP = ('XRDP_INI="$1"; DRY_RUN=0; RDP_MODE=tunnel; RDP_PORT=3390; chmod() { :; }; chown() { :; }; '
+           'usermod() { :; }; systemctl() { return 1; }; configure_rdp')
+
+    def test_rdp_config_keeps_package_file_without_upgrade(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / "xrdp.ini"
+            ini.write_text("[Globals]\nport=3389\nmax_bpp=32\n")
+            result = self.function(self.RDP, ini)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(ini.read_text(), "[Globals]\nport=tcp://127.0.0.1:3390\nmax_bpp=32\n")
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["xrdp.ini"])
+
+    def test_rdp_config_adopts_new_package_default_after_upgrade(self):
+        # dpkg 保留了改过的 xrdp.ini；新版默认值（如 runtime_user）在 .dpkg-dist 中，必须采用。
+        with tempfile.TemporaryDirectory() as tmp:
+            ini = Path(tmp) / "xrdp.ini"
+            ini.write_text("[Globals]\nport=tcp://127.0.0.1:3390\nmax_bpp=32\n")
+            Path(f"{ini}.dpkg-dist").write_text("[Globals]\nport=3389\nruntime_user=xrdp\nmax_bpp=32\n")
+            result = self.function(self.RDP, ini)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(ini.read_text(),
+                             "[Globals]\nport=tcp://127.0.0.1:3390\nruntime_user=xrdp\nmax_bpp=32\n")
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["xrdp.ini"])
+            self.assertIn("Adopted the new default", result.stderr)
 
     def test_xrdp_rejects_missing_globals(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -413,6 +472,16 @@ class HostTests(unittest.TestCase):
             self.assertEqual(result.returncode, 3, result.stderr)
             [log] = logs.iterdir()
             self.assertIn(f"init failed (exit 3); log: {log}", result.stderr)
+
+    def test_init_stops_at_the_first_failing_step(self):
+        # 日志管道不能让 initialize 内部的 errexit 失效。
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.function('INIT_LOG_DIR="$1"; initialize() { echo "step one" >&2; false; '
+                                   'echo "continued after failure" >&2; }; DRY_RUN=0; run_init', Path(tmp) / "logs")
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("step one", result.stderr)
+            self.assertNotIn("continued after failure", result.stderr)
+            self.assertIn("init failed (exit 1)", result.stderr)
 
     def test_init_keeps_the_five_newest_logs(self):
         with tempfile.TemporaryDirectory() as tmp:

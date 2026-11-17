@@ -10,23 +10,17 @@ README 之外的使用细节：安装、连接、桌面维护、软件管理、�
 
 ### 选择系统
 
-新建桌面默认使用 Ubuntu 26.10。XFCE 和 xrdp 继续使用系统官方源，AgentDesk 不单独编译或升级它们。2026-11 官方源中的版本：
+以下两个系统经过验证，新建桌面优先用 **Debian 13**：
 
-| 系统 | XFCE | xrdp | 建议 | 验证状态 |
+| 系统 | XFCE | xrdp | 系统支持期 | 验证状态 |
 |---|---|---|---|---|
-| Ubuntu 26.10 | 4.20 | [0.10.6.1](https://packages.ubuntu.com/stonking/xrdp) | **默认** | 待验收 |
-| Ubuntu 26.04 LTS | 4.20 | 0.10.1 | 可用 | E2E 通过；AWS 自动验收 |
-| Debian 13 | 4.20 | 0.10.1 | 可用 | 未验证 |
-| Ubuntu 24.04 LTS | 4.18 | 0.9.24 | 可用 | 未验证 |
-| Debian 12 | 4.18 | 0.9.21 | 可用 | 未验证 |
-| Ubuntu 22.04 LTS | 4.16 | 0.9.17 | 能用，不推荐 | 未验证 |
+| **Debian 13（推荐）** | 4.20 | 0.10.6.1（[trixie-backports](https://backports.debian.org/)，带 H.264） | [安全支持约到 2028 年，LTS 到 2030 年](https://wiki.debian.org/DebianReleases) | E2E 通过；Lightsail 真机验收 |
+| Ubuntu 26.10 | 4.20 | [0.10.6.1](https://packages.ubuntu.com/stonking/xrdp)（官方源） | [到 2027 年 7 月](https://ubuntu.com/about/release-cycle) | E2E 通过；真机待验收 |
 
-验证状态：E2E 指 [Docker E2E](TESTING_GUIDE.md#docker-e2etestse2esh)，真机验收见 [ROADMAP](ROADMAP.md) 的待验收项；“未验证”的系统允许安装，但没有跑过完整流程。
-
-- Ubuntu 26.10 是非 LTS 正式版，[官方支持到 2027 年 7 月](https://ubuntu.com/about/release-cycle)，需在支持结束前升级系统；AgentDesk 不执行操作系统升级。安装与 GUI 验收进度见 [ROADMAP](ROADMAP.md)。
-- amd64 和 arm64（如 AWS Graviton）都支持。
-- Ubuntu 22.04 的桌面较旧，官方渠道无法升级，xrdp 的部分安全补丁只在 Ubuntu Pro 中提供；仍要用时建议 `--rdp-mode tunnel`。不建议用第三方 PPA 升级 XFCE 或 xrdp。
-- 其他 Debian 系会警告后继续安装；更早的版本和非 Debian 系会被拒绝。
+- amd64 和 arm64（如 AWS Graviton）都支持。AWS Lightsail 只有 Debian 13（没有 Ubuntu 26.x），见 [agentdesk-create](../skills/agentdesk-create/SKILL.md)。
+- Debian 13 自带的 xrdp 是 0.10.1，没有 H.264。init 只把 xrdp 和 xorgxrdp 换成官方 trixie-backports 中的版本（系统没配置时自动添加该源），其余软件包仍来自 stable。backports 不在 Debian 安全团队的自动更新范围内，所以每次 `sudo agentdesk init` 都会把这两个包升到 backports 的最新版；升级会重启 xrdp，先退出桌面再运行。
+- Ubuntu 26.10 的 XFCE 和 xrdp 都来自官方源。它是非 LTS 版本，需在支持结束前升级系统；AgentDesk 不执行操作系统升级。
+- 其他 Debian/Ubuntu 版本同样支持，安装时提示未经验证，需要自己验证；Ubuntu 22.04、Debian 12 之前的版本和非 Debian 系会被拒绝。
 
 ### 参数
 

@@ -35,6 +35,12 @@ verify() {
       *) desktop_user "$tool" --version ;;
     esac
   done
+  # Debian 13 的 xrdp/xorgxrdp 必须来自 trixie-backports（带 H.264）。
+  if grep -qx 'VERSION_ID="13"' /etc/os-release && grep -qx 'ID=debian' /etc/os-release; then
+    for package in xrdp xorgxrdp; do
+      dpkg-query -W -f='${Version}\n' "$package" | grep -q '~bpo13'
+    done
+  fi
   for package in google-chrome-stable code; do
     [ "$(dpkg-query -W -f='${Status}' "$package")" = 'install ok installed' ]
     dpkg-query -W -f='${Package} ${Version}\n' "$package"
