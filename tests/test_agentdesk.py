@@ -384,7 +384,10 @@ class HostTests(unittest.TestCase):
             lines = [line for line in policy.read_text().splitlines() if line and not line.startswith("#")]
             # root 用 sudo passwd 设置密码时也必须强制，否则只是警告。
             self.assertEqual(lines, ["minlen = 10", "minclass = 3", "enforce_for_root"])
-        self.assertIn("libpam-pwquality", self.function('DRY_RUN=1; install_packages').stderr)
+        packages = self.function('DRY_RUN=1; install_packages').stderr
+        # 缺少字典时 pwquality 拒绝所有密码。
+        self.assertIn("libpam-pwquality", packages)
+        self.assertIn("cracklib-runtime", packages)
 
     INIT = ('INIT_LOG_DIR="$1"; initialize() { echo "progress" >&2; echo "connection details"; '
             'return "$INIT_STATUS"; }; DRY_RUN=0; run_init')
@@ -888,8 +891,10 @@ class AwkCompatibilityTests(unittest.TestCase):
     )
 
     def test_parsers_agree_across_awk_implementations(self):
-        # 未安装的实现跳过；Debian/Ubuntu 默认带 mawk。
         candidates = {name: shutil.which(name) for name in ["mawk", "gawk", "awk"]}
+        if os.environ.get("CI"):
+            # CI 安装了 mawk 和 gawk，缺失时不能悄悄跳过；本地未安装的实现跳过。
+            self.assertTrue(candidates["mawk"] and candidates["gawk"], candidates)
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             (base / "settings.yaml").write_text(

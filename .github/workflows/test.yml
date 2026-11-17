@@ -16,10 +16,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # mise 与产品相同，经 extrepo 从官方 apt 源安装。
-      - name: Install ShellCheck, OpenSSH and mise
+      # mawk 与 gawk 用于 awk 兼容性测试（Debian 默认 mawk）。
+      - name: Install ShellCheck, OpenSSH, awk variants and mise
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends shellcheck extrepo openssh-server
+          sudo apt-get install -y -qq --no-install-recommends shellcheck extrepo openssh-server mawk gawk
           sudo mkdir -p /run/sshd
           sudo extrepo enable mise
           sudo apt-get update -qq

@@ -330,7 +330,8 @@ install_packages() {
     polkitd pkexec ssl-cert librsvg2-common adwaita-icon-theme greybird-gtk-theme \
     fonts-noto-cjk fonts-noto-color-emoji fonts-dejavu-core \
     fcitx5 fcitx5-chinese-addons fcitx5-frontend-gtk3 fcitx5-frontend-qt5 \
-    im-config sassc libglib2.0-dev-bin libxml2-utils gnome-themes-extra extrepo libpam-pwquality
+    im-config sassc libglib2.0-dev-bin libxml2-utils gnome-themes-extra extrepo \
+    libpam-pwquality cracklib-runtime
 }
 
 # mise 来自官方 apt 源（经 extrepo 启用，带签名校验）。
@@ -369,6 +370,7 @@ configure_locale() {
 }
 
 # 全机密码规则（pam_pwquality）；只约束之后设置的密码，已有密码不回溯检查。
+# 字典检查需要 cracklib-runtime 生成的字典（只是 Recommends），缺少时任何密码都设置不了。
 PASSWORD_POLICY=/etc/security/pwquality.conf.d/agentdesk.conf
 PASSWORD_RULES="at least 10 characters with 3 of: lowercase, uppercase, digit, symbol"
 
@@ -996,7 +998,7 @@ verify() {
     fi
   }
   for package in xfce4 gvfs gvfs-daemons xrdp xorgxrdp openssh-server fcitx5 fcitx5-chinese-addons \
-    fonts-noto-cjk librsvg2-common libpam-pwquality mise google-chrome-stable code; do
+    fonts-noto-cjk librsvg2-common libpam-pwquality cracklib-runtime mise google-chrome-stable code; do
     check "$package installed" package_installed "$package"
   done
   check "shared tools installed" shared_tools_ready

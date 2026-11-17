@@ -1,5 +1,7 @@
 # 手动触发：在 amd64 与 arm64 的 systemd 容器里真实安装、重跑、重启并打开桌面应用。
 name: e2e
+# 运行记录与任务名显示被测镜像，而不是运行主机。
+run-name: e2e ${{ inputs.image }}
 
 on:
   workflow_dispatch:
@@ -13,6 +15,7 @@ permissions:
 
 jobs:
   e2e:
+    name: ${{ inputs.image }} ${{ matrix.arch }}
     strategy:
       fail-fast: false
       matrix:
