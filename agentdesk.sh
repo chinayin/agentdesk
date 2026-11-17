@@ -698,7 +698,8 @@ theme_checkout() {
 theme_installer() {
   local work="$1" source="$2"
   shift 2
-  runuser -u nobody -- env -i -C "$work/$source" HOME="$work" PATH=/usr/local/bin:/usr/bin:/bin \
+  # 上游先用 logname 取用户名，取不到再用 USER；非登录会话（cloud-init、容器）里 logname 失败，必须给 USER。
+  runuser -u nobody -- env -i -C "$work/$source" HOME="$work" USER=nobody LOGNAME=nobody PATH=/usr/local/bin:/usr/bin:/bin \
     TERM=xterm LANG=C.UTF-8 bash install.sh "$@"
 }
 

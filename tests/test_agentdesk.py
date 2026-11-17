@@ -690,6 +690,20 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(result.returncode, 73, result.stderr)
         self.assertFalse((self.root / "sysroot/var/lib/agentdesk/theme").exists())
 
+    def test_theme_installer_runs_with_user_outside_login_session(self):
+        stubs = self.root / "bin"
+        stubs.mkdir()
+        # runuser 桩：跳过 "-u nobody --"，执行其后的 env -i 命令。
+        (stubs / "runuser").write_text('#!/bin/sh\nshift 3\nexec "$@"\n')
+        (stubs / "runuser").chmod(0o755)
+        source = self.root / "work/gtk"
+        source.mkdir(parents=True)
+        (source / "install.sh").write_text('printf "%s %s %s" "$USER" "$LOGNAME" "$*"\n')
+        env = {**os.environ, "PATH": f"{stubs}:{os.environ['PATH']}"}
+        result = self.shell('theme_installer "$1" gtk -c dark', self.root / "work", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "nobody nobody -c dark")
+
     def test_theme_dry_run_writes_nothing(self):
         result = self.shell('DRY_RUN=1; THEME=whitesur; configure_desktop')
         self.assertEqual(result.returncode, 0, result.stderr)
