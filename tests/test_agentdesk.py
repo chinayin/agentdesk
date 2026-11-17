@@ -448,6 +448,32 @@ class HostTests(unittest.TestCase):
         self.assertIn("libpam-pwquality", packages)
         self.assertIn("cracklib-runtime", packages)
 
+    def test_chrome_repo_keeps_only_mise_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.function('DRY_RUN=1; configure_chrome_repo "$1"', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+            defaults = Path(tmp) / "etc/default/google-chrome"
+            sources = Path(tmp) / "etc/apt/sources.list.d/google-chrome.sources"
+            # 新主机：预先写 defaults，Chrome 的 postinst 就不再另加源。
+            result = self.function('DRY_RUN=0; configure_chrome_repo "$1"', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(defaults.read_text(), 'repo_add_once="false"\n')
+            self.assertEqual(defaults.stat().st_mode & 0o777, 0o644)
+            # 已有主机：删除 Chrome 自动生成的源，保留已有的 defaults。
+            defaults.write_text('repo_add_once="false"\nrepo_reenable_on_distupgrade="true"\n')
+            sources.parent.mkdir(parents=True)
+            sources.write_text("### THIS FILE IS AUTOMATICALLY CONFIGURED ###\nTypes: deb\n")
+            result = self.function('DRY_RUN=0; configure_chrome_repo "$1"', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(sources.exists())
+            self.assertIn("repo_reenable_on_distupgrade", defaults.read_text())
+            # 不是 Chrome 生成的同名文件不动。
+            sources.write_text("Types: deb\n")
+            result = self.function('DRY_RUN=0; configure_chrome_repo "$1"', tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(sources.exists())
+
     INIT = ('INIT_LOG_DIR="$1"; initialize() { echo "progress" >&2; echo "connection details"; '
             'return "$INIT_STATUS"; }; DRY_RUN=0; run_init')
 

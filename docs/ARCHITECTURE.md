@@ -54,6 +54,7 @@ flowchart TD
 /etc/agentdesk/agentdesk.yaml        # init 保存的参数
 /etc/ssh/sshd_config.d/00-agentdesk.conf # 工作账户的 SSH 密码认证
 /etc/security/pwquality.conf.d/agentdesk.conf # 全机密码规则
+/etc/default/google-chrome           # repo_add_once="false"：Chrome 不再另加源，只用 mise 管理的那份
 /var/log/agentdesk/init-*.log         # init 日志，root 可读，保留最近 5 份
 /etc/xdg/agentdesk/                  # 桌面系统默认值（XFCE、Fcitx5、自启动）
 /etc/X11/Xsession.d/21agentdesk      # 图形会话：XDG_CONFIG_DIRS、语言、独立 D-Bus
