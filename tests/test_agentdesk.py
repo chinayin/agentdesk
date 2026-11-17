@@ -165,6 +165,8 @@ class HostTests(unittest.TestCase):
                 self.assertEqual(" xrdp " in main_install, not from_backports)
                 self.assertEqual("xrdp/trixie-backports xorgxrdp/trixie-backports" in result.stderr, from_backports)
                 self.assertEqual("enable trixie-backports" in result.stderr, from_backports)
+                # 升级已装的 xrdp 时保留 AgentDesk 改过的 xrdp.ini，不询问。
+                self.assertEqual("--force-confold" in result.stderr, from_backports)
 
     def test_backports_source_is_added_only_when_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -445,6 +447,16 @@ class HostTests(unittest.TestCase):
             self.assertEqual(result.returncode, 3, result.stderr)
             [log] = logs.iterdir()
             self.assertIn(f"init failed (exit 3); log: {log}", result.stderr)
+
+    def test_init_stops_at_the_first_failing_step(self):
+        # 日志管道不能让 initialize 内部的 errexit 失效。
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.function('INIT_LOG_DIR="$1"; initialize() { echo "step one" >&2; false; '
+                                   'echo "continued after failure" >&2; }; DRY_RUN=0; run_init', Path(tmp) / "logs")
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("step one", result.stderr)
+            self.assertNotIn("continued after failure", result.stderr)
+            self.assertIn("init failed (exit 1)", result.stderr)
 
     def test_init_keeps_the_five_newest_logs(self):
         with tempfile.TemporaryDirectory() as tmp:

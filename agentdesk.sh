@@ -366,8 +366,10 @@ install_packages() {
     libpam-pwquality cracklib-runtime
   if [ "$OS_RELEASE" = debian:13 ]; then
     # 已装 stable 版本时会升级，xrdp 随之重启并断开当前桌面会话。
+    # xrdp.ini 由 AgentDesk 修改过；保留现有配置文件，否则 dpkg 在无终端时询问并失败。
     info "Installing xrdp and xorgxrdp from trixie-backports"
     run env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install -y --no-install-recommends \
+      -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
       xrdp/trixie-backports xorgxrdp/trixie-backports
   fi
 }
@@ -802,8 +804,11 @@ run_init() {
   install -d -m 0700 "$INIT_LOG_DIR"
   log="$INIT_LOG_DIR/init-$(date +%Y%m%d-%H%M%S).log"
   (umask 077 && : >> "$log")
-  # stderr 经 tee 同时进入日志和终端，stdout 原样输出；pipefail 保留 initialize 的退出码。
-  { initialize 2>&1 >&3 3>&- | tee -a "$log" >&2 3>&-; } 3>&1 || status=$?
+  # stderr 经 tee 同时进入日志和终端，stdout 原样输出。不能写成 `… || status=$?`：那会让 initialize
+  # 内部的 errexit 全部失效、出错后继续执行；这里在子 shell 里重新开启 errexit，再从 PIPESTATUS 取退出码。
+  set +e
+  { (set -e; initialize) 2>&1 >&3 3>&- | tee -a "$log" >&2 3>&-; status=${PIPESTATUS[0]}; } 3>&1
+  set -e
   # 文件名按时间排序，通配符展开即为时间顺序。
   logs=("$INIT_LOG_DIR"/init-*.log)
   if [ "${#logs[@]}" -gt 5 ]; then rm -f "${logs[@]:0:${#logs[@]}-5}"; fi
