@@ -424,6 +424,28 @@ configure_password_policy() {
   install -m 0644 "$SCRIPT_DIR/resources/security/pwquality.conf.d/agentdesk.conf" "$root$PASSWORD_POLICY"
 }
 
+# Chrome 的 postinst 在缺少 defaults 文件时视为首次安装，另写一份与 mise 管理的源重复的 google-chrome.sources；
+# 预先写入 repo_add_once="false" 让它不再添加，已添加的（带它自动生成的文件头）删除。
+CHROME_DEFAULTS=/etc/default/google-chrome
+CHROME_SOURCES=/etc/apt/sources.list.d/google-chrome.sources
+
+configure_chrome_repo() {
+  local root="$1"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "dry-run: keep only the mise-managed Google Chrome APT source"
+    return
+  fi
+  if [ ! -e "$root$CHROME_DEFAULTS" ]; then
+    install -d -m 0755 "$root${CHROME_DEFAULTS%/*}"
+    printf 'repo_add_once="false"\n' > "$root$CHROME_DEFAULTS"
+    chmod 0644 "$root$CHROME_DEFAULTS"
+  fi
+  if grep -qx '### THIS FILE IS AUTOMATICALLY CONFIGURED ###' "$root$CHROME_SOURCES" 2>/dev/null; then
+    rm -f "$root$CHROME_SOURCES"
+    info "Removed duplicate Google Chrome APT source: $CHROME_SOURCES"
+  fi
+}
+
 configure_account() {
   if ! getent passwd "$DESKTOP_USER" >/dev/null; then
     run useradd --create-home --shell /bin/bash --user-group "$DESKTOP_USER"
@@ -775,6 +797,7 @@ initialize() {
   install_mise
   configure_rdp
   install_program
+  configure_chrome_repo ""
   run bash /usr/local/lib/agentdesk/agentdesk.sh install --system
   configure_desktop
   if [ "$masked" -eq 1 ]; then

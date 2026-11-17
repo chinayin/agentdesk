@@ -45,6 +45,8 @@ verify() {
     [ "$(dpkg-query -W -f='${Status}' "$package")" = 'install ok installed' ]
     dpkg-query -W -f='${Package} ${Version}\n' "$package"
   done
+  # Chrome 只保留 mise 管理的一份源。
+  [ "$(grep -l 'dl.google.com/linux/chrome' /etc/apt/sources.list.d/* | wc -l)" -eq 1 ]
   # 检查安装包 postinst 注册源后仍能刷新，捕获 Signed-By 冲突。
   apt-get -o APT::Update::Error-Mode=any update -qq
 }
