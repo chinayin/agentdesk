@@ -22,9 +22,9 @@ On AWS, default to Lightsail with Debian 13 and the 2 vCPU / 8 GB plan, which co
 
 Check the native CLI, the credential identity and the target region first. If the CLI is missing, give the official install link and stop the dependent steps; do not install it silently:
 
-- AWS Lightsail (default): `command -v aws`, then read [the Lightsail flow](references/lightsail.md).
-- AWS EC2: `command -v aws`, then read [the EC2 flow](references/aws.md).
-- Alibaba Cloud: `command -v aliyun`, then read [the Alibaba Cloud flow](references/aliyun.md).
+- AWS Lightsail (default): `command -v aws`, then read [the Lightsail flow](references/aws-lightsail.md).
+- AWS EC2: `command -v aws`, then read [the EC2 flow](references/aws-ec2.md).
+- Alibaba Cloud: `command -v aliyun`, then read [the Alibaba Cloud flow](references/aliyun-ecs.md).
 
 Keep this run's parameters, native request JSON, create responses and acceptance logs in a subdirectory of the git-ignored `local/` (directory 700, files 600). Never write host addresses, accounts, resource IDs or key paths back into this skill or its templates. Replace every placeholder in a template with a queried value before use.
 

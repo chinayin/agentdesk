@@ -1,6 +1,6 @@
 # AWS EC2 Native CLI Flow
 
-Use EC2 only for the cases listed in the skill; the default AWS flow is [Lightsail](lightsail.md).
+Use EC2 only for the cases listed in the skill; the default AWS flow is [Lightsail](aws-lightsail.md).
 
 Use `aws` and pass `--profile "$PROFILE" --region "$REGION" --no-cli-pager` on every command. The variables below come from the user's parameters or API queries; do not assume a personal environment.
 
@@ -8,7 +8,7 @@ Use `aws` and pass `--profile "$PROFILE" --region "$REGION" --no-cli-pager` on e
 2. Confirm CPU, memory and architecture with `ec2 describe-instance-types`; confirm the subnet and its real public/private routing with `describe-subnets` and `describe-route-tables`.
 3. Resolve the official Ubuntu image from the Canonical SSM parameter `/aws/service/canonical/ubuntu/server/$CODENAME/stable/current/amd64/hvm/ebs-gp3/ami-id`. Ubuntu 26.10 is `stonking`. Then check owner, version, architecture, state and RootDeviceName with `describe-images`. For Debian use Debian's official image publication; do not reuse the Canonical path.
 4. Create a dedicated security group tagged with this run's name and `ManagedBy=agentdesk`. Allow TCP 22 from the required source CIDR, plus the RDP port for direct access. Confirm the rules from the query result and keep the default egress for software downloads. Never open RDP to the whole internet.
-5. Copy the [RunInstances JSON template](../assets/aws-run-instances.json) and fill it with a JSON library: the AMI's root device name, an encrypted gp3 disk, count, key, security group and subnet. The template is a T3 on-demand public example; for arm64 use an arm64 AMI with a Graviton type such as T4g. Remove `CreditSpecification` for non-burstable types and disable the public address for private-network mode. Keep IMDSv2 required.
+5. Copy the [RunInstances JSON template](../assets/aws-ec2-run-instances.json) and fill it with a JSON library: the AMI's root device name, an encrypted gp3 disk, count, key, security group and subnet. The template is a T3 on-demand public example; for arm64 use an arm64 AMI with a Graviton type such as T4g. Remove `CreditSpecification` for non-burstable types and disable the public address for private-network mode. Keep IMDSv2 required.
 6. Generate one ClientToken for this request and save the JSON. Run `aws ec2 run-instances --cli-input-json "file://$REQUEST" --dry-run` first; only `DryRunOperation` means the permission check passed, so resolve any other error first. Then create with the same JSON and save the response. A dry run does not guarantee capacity or quota.
 7. On a create timeout, query `describe-instances --filters "Name=client-token,Values=$CLIENT_TOKEN"` first; retrying with the same parameters and token is idempotent. Never create a second copy with a new token.
 8. Poll `describe-instance-status --include-all-instances` and `describe-instances`; record the instance ID, address and state. Get the host key fingerprints printed by cloud-init with `get-console-output --instance-id "$INSTANCE_ID" --latest`, compare them with `ssh-keyscan`, then connect.
